@@ -27,6 +27,9 @@ async def health_check():
         "version": "0.1.0"
     }
 
-# Mock API 또는 추가 라우터는 여기에 Include 예정
-# from app.api.v1 import plants
-# app.include_router(plants.router, prefix="/api/v1")
+# API 라우터 등록
+from app.api.v1.plants import router as plants_router
+from app.api.v1.chat import router as chat_router
+
+app.include_router(plants_router, prefix="/api/v1")
+app.include_router(chat_router, prefix="/api/v1")
