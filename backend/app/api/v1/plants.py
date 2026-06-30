@@ -1,9 +1,10 @@
 import uuid
 from datetime import datetime, date, timezone
 from typing import List
-from fastapi import APIRouter, Path, status
+from fastapi import APIRouter, Path, status, Depends
 from app.schemas.plant import Plant, PlantCreate, PlantPhoto, PlantPhotoCreate
 from app.schemas.care_log import CareLog, CareLogCreate
+from app.auth.security import get_current_user
 
 router = APIRouter(prefix="/plants", tags=["Plants"])
 
@@ -28,16 +29,19 @@ MOCK_PLANTS = [
 ]
 
 @router.get("", response_model=List[Plant], summary="사용자의 식물 목록 조회")
-async def list_plants():
+async def list_plants(current_user_id: uuid.UUID = Depends(get_current_user)):
     """
-    현재 로그인한 사용자의 모든 식물 프로필 목록을 반환합니다. (Mock 데이터)
+    현재 로그인한 사용자의 모든 식물 프로필 목록을 반환합니다. (인증 및 Mock 데이터)
     """
     return MOCK_PLANTS
 
 @router.post("", response_model=Plant, status_code=status.HTTP_201_CREATED, summary="식물 프로필 신규 등록")
-async def create_plant(plant_in: PlantCreate):
+async def create_plant(
+    plant_in: PlantCreate,
+    current_user_id: uuid.UUID = Depends(get_current_user)
+):
     """
-    새로운 식물 프로필을 등록합니다. (Mock 데이터)
+    새로운 식물 프로필을 등록합니다. (인증 및 Mock 데이터)
     """
     new_plant = Plant(
         id=uuid.uuid4(),
@@ -54,10 +58,11 @@ async def create_plant(plant_in: PlantCreate):
 @router.post("/{plantId}/care-logs", response_model=CareLog, status_code=status.HTTP_201_CREATED, summary="식물 재배/물주기 로그 등록")
 async def create_care_log(
     plantId: uuid.UUID = Path(..., description="식물 UUID"),
-    log_in: CareLogCreate = ...
+    log_in: CareLogCreate = ...,
+    current_user_id: uuid.UUID = Depends(get_current_user)
 ):
     """
-    특정 식물에 대한 물주기, 상태 점검 및 메모를 포함한 재배 일지 로그를 등록합니다. (Mock 데이터)
+    특정 식물에 대한 물주기, 상태 점검 및 메모를 포함한 재배 일지 로그를 등록합니다. (인증 및 Mock 데이터)
     """
     return CareLog(
         id=uuid.uuid4(),
@@ -72,10 +77,11 @@ async def create_care_log(
 @router.post("/{plantId}/photos", response_model=PlantPhoto, status_code=status.HTTP_201_CREATED, summary="식물 사진 메타데이터 등록")
 async def create_plant_photo(
     plantId: uuid.UUID = Path(..., description="식물 UUID"),
-    photo_in: PlantPhotoCreate = ...
+    photo_in: PlantPhotoCreate = ...,
+    current_user_id: uuid.UUID = Depends(get_current_user)
 ):
     """
-    Supabase Storage 등에 업로드 완료된 식물 사진의 경로 및 메타데이터를 백엔드에 등록합니다. (Mock 데이터)
+    Supabase Storage 등에 업로드 완료된 식물 사진의 경로 및 메타데이터를 백엔드에 등록합니다. (인증 및 Mock 데이터)
     """
     return PlantPhoto(
         id=uuid.uuid4(),
