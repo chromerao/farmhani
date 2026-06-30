@@ -30,6 +30,8 @@ async def health_check():
 # API 라우터 등록
 from app.api.v1.plants import router as plants_router
 from app.api.v1.chat import router as chat_router
+from app.api.v1.uploads import router as uploads_router
 
 app.include_router(plants_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
+app.include_router(uploads_router, prefix="/api/v1")

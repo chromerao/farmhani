@@ -95,6 +95,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PlantCareChatResponse"
+  /api/v1/uploads/signed-url:
+    post:
+      summary: Get signed upload URL for plant photo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadSignedUrlRequest"
+      responses:
+        "200":
+          description: Signed upload URL and storage path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadSignedUrlResponse"
 components:
   securitySchemes:
     bearerAuth:
@@ -241,3 +257,23 @@ components:
           type: string
         publisher:
           type: string
+    UploadSignedUrlRequest:
+      type: object
+      required: [fileName]
+      properties:
+        fileName:
+          type: string
+          example: monstera.jpg
+        mimeType:
+          type: string
+          example: image/jpeg
+    UploadSignedUrlResponse:
+      type: object
+      required: [signedUrl, storagePath]
+      properties:
+        signedUrl:
+          type: string
+          example: https://xyz.supabase.co/storage/v1/object/upload/sign/plant-photos/...
+        storagePath:
+          type: string
+          example: users/d3b07384-d113-49c3-a558-1ec114a84d41/plants/abcd-efgh-1234_monstera.jpg

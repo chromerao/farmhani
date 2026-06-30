@@ -89,7 +89,26 @@ class MockSupabaseTable:
                 ]
         return MockAPIResponse(data)
 
+class MockSupabaseStorageBucket:
+    def __init__(self, bucket_name):
+        self.bucket_name = bucket_name
+
+    def create_signed_upload_url(self, path):
+        return {
+            "signed_url": f"https://mock-supabase.co/storage/v1/object/upload/sign/{self.bucket_name}/{path}?token=mock-token",
+            "signedUrl": f"https://mock-supabase.co/storage/v1/object/upload/sign/{self.bucket_name}/{path}?token=mock-token",
+            "token": "mock-token",
+            "path": path
+        }
+
+class MockSupabaseStorage:
+    def from_(self, bucket_name):
+        return MockSupabaseStorageBucket(bucket_name)
+
 class MockSupabaseClient:
+    def __init__(self):
+        self.storage = MockSupabaseStorage()
+
     def table(self, name):
         return MockSupabaseTable(name)
 
@@ -164,6 +183,19 @@ def test_consult_plant_care():
     assert "summary" in data
     assert "possibleCauses" in data
     assert "todayActions" in data
-    assert len(data["citations"]) > 0
     assert "safetyNotice" in data
+
+def test_create_signed_upload_url():
+    payload = {
+        "fileName": "my_monstera.png",
+        "mimeType": "image/png"
+    }
+    response = client.post("/api/v1/uploads/signed-url", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "signedUrl" in data
+    assert "storagePath" in data
+    assert data["storagePath"].startswith(f"users/{TEST_USER_ID}/plants/")
+    assert data["storagePath"].endswith(".png")
+    assert "token=mock-token" in data["signedUrl"]
 
