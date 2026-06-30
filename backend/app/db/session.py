@@ -25,7 +25,10 @@ def get_supabase_client(
     client = create_client(
         supabase_url=settings.SUPABASE_URL,
         supabase_key=settings.SUPABASE_ANON_KEY,
-        options=ClientOptions(persist_session=False)
+        options=ClientOptions(
+            persist_session=False,
+            headers={"Authorization": f"Bearer {token}"}
+        )
     )
     client.postgrest.auth(token)
     return client
