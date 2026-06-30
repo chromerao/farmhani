@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>식물 상세 및 성장 일지 | Farm하니?</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@600;700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #bfc9c1;
+            border-radius: 10px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed": "#002114",
+                        "on-primary": "#ffffff",
+                        "on-background": "#191c1d",
+                        "surface-bright": "#f8f9fa",
+                        "on-primary-fixed-variant": "#0e5138",
+                        "earth-deep": "#6B705C",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed-dim": "#c8c8b4",
+                        "surface-container": "#edeeef",
+                        "growth-light": "#D8E2DC",
+                        "outline-variant": "#bfc9c1",
+                        "on-secondary-fixed": "#1b1d10",
+                        "on-surface": "#191c1d",
+                        "diagnostic-red": "#E07A5F",
+                        "tertiary-fixed-dim": "#ccc6b3",
+                        "surface-container-high": "#e7e8e9",
+                        "background": "#f8f9fa",
+                        "primary-container": "#2d6a4f",
+                        "inverse-on-surface": "#f0f1f2",
+                        "primary-fixed-dim": "#95d4b3",
+                        "secondary-container": "#e4e4cf",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary": "#4a4839",
+                        "error": "#ba1a1a",
+                        "surface-tint": "#2c694e",
+                        "secondary": "#5f5f50",
+                        "on-secondary-fixed-variant": "#474839",
+                        "inverse-surface": "#2e3132",
+                        "inverse-primary": "#95d4b3",
+                        "on-tertiary-container": "#dfdac6",
+                        "secondary-fixed": "#e4e4cf",
+                        "tertiary-fixed": "#e8e2cf",
+                        "surface-dim": "#d9dadb",
+                        "on-tertiary-fixed-variant": "#4a4738",
+                        "surface-container-highest": "#e1e3e4",
+                        "on-secondary-container": "#656555",
+                        "primary-fixed": "#b1f0ce",
+                        "outline": "#707973",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed": "#1e1c10",
+                        "primary": "#0f5238",
+                        "surface-variant": "#e1e3e4",
+                        "on-surface-variant": "#404943",
+                        "on-error": "#ffffff",
+                        "surface": "#f8f9fa",
+                        "surface-container-low": "#f3f4f5",
+                        "error-container": "#ffdad6",
+                        "sage-accent": "#95D5B2",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#a8e7c5",
+                        "tertiary-container": "#635f50"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter-sm": "16px",
+                        "max-width": "1200px",
+                        "gutter-md": "24px",
+                        "margin-lg": "40px",
+                        "margin-sm": "20px",
+                        "base": "8px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["inter"],
+                        "headline-md": ["manrope"],
+                        "display-lg": ["manrope"],
+                        "headline-lg": ["manrope"],
+                        "body-md": ["inter"],
+                        "headline-lg-mobile": ["manrope"],
+                        "body-lg": ["inter"],
+                        "label-md": ["inter"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500"}]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface font-body-md selection:bg-sage-accent/30 custom-scrollbar">
+<!-- TopNavBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-gutter-md bg-surface-container-lowest dark:bg-inverse-surface h-16 shadow-sm dark:shadow-none">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-3xl">potted_plant</span>
+<span class="text-headline-md font-headline-md font-bold text-primary dark:text-primary-fixed-dim">Farm하니?</span>
+</div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="text-primary dark:text-primary-fixed-dim border-b-2 border-primary dark:border-primary-fixed-dim pb-1 font-label-md text-label-md cursor-pointer active:scale-95 transition-colors duration-200" href="#">내 식물</a>
+<a class="text-on-surface-variant dark:text-outline-variant font-label-md text-label-md hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 cursor-pointer active:scale-95" href="#">AI 컨설팅</a>
+</nav>
+<div class="flex items-center gap-4">
+<div class="hidden md:flex bg-surface-container rounded-full px-4 py-1.5 items-center gap-2">
+<span class="material-symbols-outlined text-outline text-sm">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-label-md w-48 p-0" placeholder="식물 종류 검색..." type="text"/>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary p-2">notifications</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary p-2">settings</span>
+<div class="w-8 h-8 rounded-full overflow-hidden ml-2 border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional user profile portrait of a woman with a warm smile, set against a blurred background of a lush indoor garden. The image has a clean, airy quality with high-key lighting that emphasizes the minimalist and professional aesthetic of the Plant Doctor AI application, using soft greens and neutrals." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3r9SXNCb9l2Tb-tVgxcho2vfT3zB4ODkaQHnuQngsEddrPwIO78t_1rRWBykn_DZNr3gmVoKZ3J4ByEnEjZpAX44n7l1vzgJ6tnyXn76JM7vjWdGgy5JKBtXV4JNE3h39lO0itX3FT5OYTHfe2LYwGjFGJqtxzGF7nO6O0OfjeZo-0HlLqMmx_95ZaGTKQFwWfviHUjfPJYQbeuGBPVj-212mci2DjWKuyznUd2uI_UK2Qsa3o8Oy"/>
+</div>
+</div>
+</div>
+</header>
+<div class="flex min-h-screen pt-16">
+<!-- SideNavBar -->
+<aside class="hidden md:flex flex-col w-64 h-[calc(100vh-64px)] fixed left-0 top-16 pt-8 px-4 border-r border-outline-variant/20 bg-surface-container-low dark:bg-surface-container-lowest">
+<div class="px-3 mb-6">
+<h2 class="text-headline-sm font-headline-md text-primary">식물 카테고리</h2>
+<p class="text-label-sm font-label-sm text-on-surface-variant opacity-70">컬렉션 관리</p>
+</div>
+<nav class="flex-1">
+<div class="flex items-center gap-3 p-3 mb-1 cursor-pointer hover:bg-growth-light dark:hover:bg-tertiary-container rounded-lg transition-all duration-200 text-on-surface-variant">
+<span class="material-symbols-outlined">home</span>
+<span class="text-label-md font-label-md">홈</span>
+</div>
+<div class="flex items-center gap-3 p-3 mb-1 cursor-pointer bg-growth-light dark:bg-tertiary-container rounded-lg transition-all duration-200 text-primary font-bold">
+<span class="material-symbols-outlined">potted_plant</span>
+<span class="text-label-md font-label-md">다육식물</span>
+</div>
+<div class="flex items-center gap-3 p-3 mb-1 cursor-pointer hover:bg-growth-light dark:hover:bg-tertiary-container rounded-lg transition-all duration-200 text-on-surface-variant">
+<span class="material-symbols-outlined">eco</span>
+<span class="text-label-md font-label-md">열대식물</span>
+</div>
+<div class="flex items-center gap-3 p-3 mb-1 cursor-pointer hover:bg-growth-light dark:hover:bg-tertiary-container rounded-lg transition-all duration-200 text-on-surface-variant">
+<span class="material-symbols-outlined">filter_vintage</span>
+<span class="text-label-md font-label-md">고사리류</span>
+</div>
+<div class="flex items-center gap-3 p-3 mb-1 cursor-pointer hover:bg-growth-light dark:hover:bg-tertiary-container rounded-lg transition-all duration-200 text-on-surface-variant mt-4 border-t border-outline-variant/10 pt-4">
+<span class="material-symbols-outlined">history</span>
+<span class="text-label-md font-label-md">최근 대화</span>
+</div>
+</nav>
+<button class="mt-auto mb-6 bg-primary text-white p-4 rounded-xl font-label-md flex items-center justify-center gap-2 hover:bg-primary-container hover:text-on-primary-container transition-all shadow-md">
+<span class="material-symbols-outlined">add</span>
+            새 카테고리 추가
+        </button>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 ml-0 md:ml-64 p-gutter-md">
+<div class="max-w-max-width mx-auto">
+<!-- Breadcrumbs -->
+<div class="flex items-center gap-2 mb-6 text-on-surface-variant font-label-sm text-label-sm">
+<span>내 식물</span>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span>다육식물</span>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span class="text-primary font-bold">몬스테라 델리시오사</span>
+</div>
+<!-- Top Section: Plant Profile Hero -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter-md mb-12">
+<!-- Image Card -->
+<div class="lg:col-span-5 relative group overflow-hidden rounded-2xl shadow-lg aspect-square lg:aspect-auto lg:h-[500px]">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10"></div>
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A lush and vibrant Monstera Deliciosa with large, split heart-shaped leaves, photographed in a high-end minimalist ceramic pot. The lighting is soft and natural, suggesting a bright window nearby. The overall aesthetic is clean, organic, and professional, perfectly fitting a sophisticated plant care app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3j5_6QaCIBChB_8oeRnQhjT0oU9wwtIyhx0TGvIxC9ZmxlA3lJPIBUs-gICNedovdZqa7nyZsq73DvtmnDDG7bZ2kHZUx3VJs3KsrhlYsIfRPp9DV7HDfCpjByosECvCL4NKaeyc8xRITeoyfJK1TLGXFfH691LvjeO_C9mjJ8Xp1GrGf8U_iYRiqbjnn9Sps73Uj4BVNHcVLo-FFymF8B5vZsPYwn_xZDVREcvSinY-CWUhvFBFk"/>
+<div class="absolute bottom-6 left-6 z-20 text-white">
+<h1 class="text-display-lg font-display-lg">몬티</h1>
+<p class="text-body-lg font-body-lg opacity-90 italic">Monstera Deliciosa</p>
+</div>
+<!-- Quick Health Badge -->
+<div class="absolute top-6 right-6 z-20 glass-card rounded-full px-4 py-2 flex items-center gap-2 border border-white/30">
+<span class="w-2.5 h-2.5 bg-sage-accent rounded-full animate-pulse"></span>
+<span class="text-label-md font-label-md text-primary">건강 상태 우수</span>
+</div>
+</div>
+<!-- Stats & Actions Card -->
+<div class="lg:col-span-7 flex flex-col gap-6">
+<div class="bg-white p-8 rounded-2xl shadow-sm border border-outline-variant/20 flex-1">
+<div class="flex justify-between items-start mb-8">
+<div>
+<h2 class="text-headline-md font-headline-md mb-1">활력 개요</h2>
+<p class="text-body-md text-on-surface-variant">AI 센서를 통해 4시간 전 마지막 체크됨</p>
+</div>
+<button class="p-3 bg-growth-light text-primary rounded-full hover:scale-105 active:scale-95 transition-all">
+<span class="material-symbols-outlined">edit</span>
+</button>
+</div>
+<!-- Health Gauges Bento -->
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+<div class="bg-surface-container-low p-4 rounded-xl flex flex-col items-center text-center">
+<div class="relative w-20 h-20 flex items-center justify-center mb-3">
+<svg class="w-full h-full -rotate-90">
+<circle class="text-outline-variant" cx="40" cy="40" fill="transparent" r="36" stroke="currentColor" stroke-width="4"></circle>
+<circle class="text-primary" cx="40" cy="40" fill="transparent" r="36" stroke="currentColor" stroke-dasharray="226" stroke-dashoffset="45" stroke-width="4"></circle>
+</svg>
+<span class="absolute text-label-md font-bold text-primary">82%</span>
+</div>
+<span class="text-label-sm text-on-surface-variant">수분</span>
+</div>
+<div class="bg-surface-container-low p-4 rounded-xl flex flex-col items-center text-center">
+<div class="w-20 h-20 flex items-center justify-center mb-3">
+<span class="material-symbols-outlined text-4xl text-diagnostic-red" style="font-variation-settings: 'FILL' 1;">light_mode</span>
+</div>
+<span class="text-label-sm text-on-surface-variant">조도: 높음</span>
+</div>
+<div class="bg-surface-container-low p-4 rounded-xl flex flex-col items-center text-center col-span-2 sm:col-span-1">
+<div class="w-20 h-20 flex items-center justify-center mb-3">
+<span class="material-symbols-outlined text-4xl text-tertiary" style="font-variation-settings: 'FILL' 1;">thermostat</span>
+</div>
+<span class="text-label-sm text-on-surface-variant">22°C - 이상적</span>
+</div>
+</div>
+<!-- Care Info -->
+<div class="space-y-4">
+<div class="flex items-center justify-between p-4 bg-growth-light/30 rounded-xl">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary bg-white p-2 rounded-lg shadow-sm">water_drop</span>
+<div>
+<p class="text-label-sm text-on-surface-variant">마지막 물주기</p>
+<p class="text-label-md font-bold">2일 전 (목요일)</p>
+</div>
+</div>
+<button class="text-primary font-bold text-label-md hover:underline">물주기 기록</button>
+</div>
+<div class="flex items-center justify-between p-4 bg-surface-container rounded-xl">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant bg-white p-2 rounded-lg shadow-sm">calendar_month</span>
+<div>
+<p class="text-label-sm text-on-surface-variant">다음 비료 시비</p>
+<p class="text-label-md font-bold">12일 후</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- AI Advice Button -->
+<button class="w-full bg-primary-container text-on-primary-container p-6 rounded-2xl flex items-center justify-between group hover:shadow-lg transition-all active:scale-[0.98]">
+<div class="flex items-center gap-4">
+<div class="bg-white/20 p-3 rounded-xl">
+<span class="material-symbols-outlined text-3xl">psychology</span>
+</div>
+<div class="text-left">
+<h3 class="font-bold text-lg">몬티를 위한 AI 조언 받기</h3>
+<p class="text-sm opacity-80">최근 성장 사진을 분석하여 영양 결핍을 확인합니다.</p>
+</div>
+</div>
+<span class="material-symbols-outlined transition-transform group-hover:translate-x-1">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Bottom Section: Growth Journal -->
+<div class="mb-12">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+<div>
+<h2 class="text-headline-lg font-headline-lg">성장 일지</h2>
+<p class="text-body-md text-on-surface-variant">2024년 1월부터 시작된 몬티의 여정 기록</p>
+</div>
+<button class="bg-primary text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:shadow-md transition-all">
+<span class="material-symbols-outlined">add_a_photo</span>
+                        새 일지 작성
+                    </button>
+</div>
+<!-- Timeline Layout -->
+<div class="relative pl-8 md:pl-0">
+<!-- Vertical Line (Desktop) -->
+<div class="hidden md:block absolute left-1/2 top-0 bottom-0 w-px bg-outline-variant/30 transform -translate-x-1/2"></div>
+<!-- Vertical Line (Mobile) -->
+<div class="md:hidden absolute left-4 top-0 bottom-0 w-px bg-outline-variant/30"></div>
+<div class="space-y-12">
+<!-- Journal Entry 1 (Left Aligned Desktop) -->
+<div class="relative flex flex-col md:flex-row items-start md:items-center">
+<div class="md:w-1/2 md:pr-12 md:text-right order-2 md:order-1 mt-4 md:mt-0">
+<div class="bg-white p-6 rounded-2xl shadow-sm border border-outline-variant/10 hover:shadow-md transition-all">
+<span class="text-label-sm text-primary font-bold block mb-2">오늘, 오전 10:45</span>
+<h4 class="text-headline-md font-bold mb-2">새 잎이 펴졌어요!</h4>
+<p class="text-body-md text-on-surface-variant mb-4">
+                                        우리가 지켜보던 큰 찢잎이 드디어 완전히 펴졌습니다. 밝은 녹색에 매우 건강해 보입니다. 갈변 현상은 전혀 없습니다.
+                                    </p>
+<div class="grid grid-cols-2 gap-2">
+<div class="rounded-lg overflow-hidden h-32">
+<img class="w-full h-full object-cover" data-alt="Close-up of a new, bright green Monstera deliciosa leaf unfurling." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXmQo-XhUa1e6KyANApBh15H7rKrBHBXgZTU89xdhMkNjqCpBTZ0rpO025A8NtjVTvO257y7-67uipqXlndyB73Wb1mFwPAHGWCwTLdXvLRHq07T3aESGsDCO0Fzk1GTrG3Nr0Xtt5kwds-fgXVg8Sr8TwjGvxFBZMZRoejyfESNffy7LbR4LjkiKlJGKcSWhcqPLhlpolu_AxWhBUatKk3habk8WGd7Q0HFWHbUmmT29wgK1qJvWS"/>
+</div>
+<div class="rounded-lg overflow-hidden h-32">
+<img class="w-full h-full object-cover" data-alt="Macro photo showing the detail of a Monstera leaf stem with a new sprout emerging." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCOBEWwa3NwCmJgDvvdzFekyg3epN6eCybvl_E2F2NcK4rKaeGFX0bnkBa62-HQfAOmvW6gtNTPu38VAnb6D6teTayM6nS2JR3e9V6t0C2NYKURmRQEWNgBfsBPlI51Bbtk8UEZoVxiRh6lBB3U5vueT2q33xNC2g6olQ38mnV0rx3860LyA3nKJ2lzFd2fwixtTUIb0EPK87fefoemZPI-gbODXOYsoG65J-GDZ2idbJJF9j3_ldDu"/>
+</div>
+</div>
+</div>
+</div>
+<div class="absolute left-[-24px] md:left-1/2 md:transform md:-translate-x-1/2 z-10 w-8 h-8 rounded-full bg-primary border-4 border-white flex items-center justify-center text-white shadow-sm order-1 md:order-2">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<div class="md:w-1/2 hidden md:block order-3"></div>
+</div>
+<!-- Journal Entry 2 (Right Aligned Desktop) -->
+<div class="relative flex flex-col md:flex-row items-start md:items-center">
+<div class="md:w-1/2 hidden md:block"></div>
+<div class="absolute left-[-24px] md:left-1/2 md:transform md:-translate-x-1/2 z-10 w-8 h-8 rounded-full bg-sage-accent border-4 border-white flex items-center justify-center text-primary shadow-sm">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">water_drop</span>
+</div>
+<div class="md:w-1/2 md:pl-12 mt-4 md:mt-0">
+<div class="bg-white p-6 rounded-2xl shadow-sm border border-outline-variant/10 hover:shadow-md transition-all">
+<span class="text-label-sm text-on-surface-variant font-bold block mb-2">2024년 3월 24일</span>
+<h4 class="text-headline-md font-bold mb-2">정기 비료 시비</h4>
+<p class="text-body-md text-on-surface-variant">
+                                        오늘 오전 물주기 중에 액체 유기 비료를 추가했습니다. 토양은 약 5cm 깊이까지 말라 있었습니다.
+                                    </p>
+</div>
+</div>
+</div>
+<!-- Journal Entry 3 (Left Aligned Desktop) -->
+<div class="relative flex flex-col md:flex-row items-start md:items-center">
+<div class="md:w-1/2 md:pr-12 md:text-right order-2 md:order-1 mt-4 md:mt-0">
+<div class="bg-white p-6 rounded-2xl shadow-sm border border-outline-variant/10 hover:shadow-md transition-all">
+<span class="text-label-sm text-on-surface-variant font-bold block mb-2">2024년 3월 18일</span>
+<h4 class="text-headline-md font-bold mb-2">햇빛이 잘 드는 곳으로 이동</h4>
+<p class="text-body-md text-on-surface-variant mb-4">
+                                        몬티를 동향 창가로 옮겨 더 많은 아침 햇살을 받게 했습니다. 새로운 잎에 더 많은 구멍(찢잎)이 생기길 기대합니다.
+                                    </p>
+<div class="rounded-lg overflow-hidden h-48 w-full">
+<img class="w-full h-full object-cover" data-alt="A wide shot of a minimalist living room featuring a large Monstera plant in a sunny corner." src="https://lh3.googleusercontent.com/aida-public/AB6AXuATkB7Ia5NQb2C8jWUQN_I0_6ONtyg2Z4LX7RTJ1oPQYUEqrhMX4uOGoDT6vLDHcr3fdKF6sYi5dNk_ErvCqPCqJBt0JP17I9vvR9zWyQSC5aPonom1r4vf0o3jWCw1eQYqMFTB_vO6iA0VHLZaL7qxCUsS3mzm3Kh1Ks9hDR5eMrCAqCjD1pEK9P5_1Vh0w_qIiHh-IUDyv_wOMl3yWBMtCOpXq7An-zLth3RXuWnrgPWYP4aBVvAm"/>
+</div>
+</div>
+</div>
+<div class="absolute left-[-24px] md:left-1/2 md:transform md:-translate-x-1/2 z-10 w-8 h-8 rounded-full bg-growth-light border-4 border-white flex items-center justify-center text-tertiary shadow-sm order-1 md:order-2">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">light_mode</span>
+</div>
+<div class="md:w-1/2 hidden md:block order-3"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="bg-surface-container-high dark:bg-inverse-surface w-full py-8 mt-auto">
+<div class="w-full max-w-max-width mx-auto px-gutter-md flex flex-col md:flex-row justify-between items-center gap-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-2xl">potted_plant</span>
+<span class="text-label-md font-label-md font-bold text-on-surface-variant">© 2024 Farm하니? 지능을 통한 성장의 가꿈.</span>
+</div>
+<div class="flex gap-6">
+<a class="text-label-sm font-label-sm text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim underline transition-all" href="#">개인정보 처리방침</a>
+<a class="text-label-sm font-label-sm text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim underline transition-all" href="#">이용 약관</a>
+<a class="text-label-sm font-label-sm text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim underline transition-all" href="#">고객 지원</a>
+</div>
+</div>
+</footer>
+<!-- Mobile Navigation Shell -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-outline-variant/20 flex justify-around py-3 z-50">
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">potted_plant</span>
+<span class="text-[10px] font-bold">내 식물</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">psychology</span>
+<span class="text-[10px]">AI 조언</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">explore</span>
+<span class="text-[10px]">둘러보기</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">account_circle</span>
+<span class="text-[10px]">프로필</span>
+</button>
+</nav>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const heroImage = document.querySelector('.group img');
+        window.addEventListener('scroll', () => {
+            const scrolled = window.pageYOffset;
+            if (heroImage) {
+                heroImage.style.transform = `translateY(${scrolled * 0.05}px) scale(${1 + scrolled * 0.0001})`;
+            }
+        });
+
+        const gauges = document.querySelectorAll('circle.text-primary');
+        gauges.forEach(gauge => {
+            const initialOffset = gauge.getAttribute('stroke-dashoffset');
+            gauge.style.strokeDashoffset = '226';
+            setTimeout(() => {
+                gauge.style.transition = 'stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1)';
+                gauge.style.strokeDashoffset = initialOffset;
+            }, 300);
+        });
+    });
+</script>
+</body></html>
