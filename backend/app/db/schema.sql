@@ -114,6 +114,41 @@ IF NOT EXISTS vector;
             embedding vector_cosine_ops
         )
     ;
+
+    -- 11. RAG 유사도 검색 RPC 함수
+    CREATE OR REPLACE FUNCTION public.match_rag_chunks (
+      query_embedding vector(1536),
+      match_threshold float,
+      match_count int
+    )
+    RETURNS TABLE (
+      id UUID,
+      source_id TEXT,
+      title TEXT,
+      url TEXT,
+      publisher TEXT,
+      content TEXT,
+      similarity float
+    )
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RETURN QUERY
+      SELECT
+        rag_chunks.id,
+        rag_chunks.source_id,
+        rag_sources.title,
+        rag_sources.url,
+        rag_sources.publisher,
+        rag_chunks.text AS content,
+        1 - (rag_chunks.embedding <=> query_embedding) AS similarity
+      FROM public.rag_chunks
+      JOIN public.rag_sources ON rag_sources.source_id = rag_chunks.source_id
+      WHERE 1 - (rag_chunks.embedding <=> query_embedding) > match_threshold
+      ORDER BY rag_chunks.embedding <=> query_embedding
+      LIMIT match_count;
+    END;
+    $$;
     -- =========================================================================
     -- [유틸리티] Supabase Auth 회원가입 시 public.profiles 테이블 자동 생성 트리거
     -- =========================================================================

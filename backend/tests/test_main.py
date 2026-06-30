@@ -48,6 +48,10 @@ class MockSupabaseTable:
         self.queries.append(("update", data))
         return self
 
+    def limit(self, num):
+        self.queries.append(("limit", num))
+        return self
+
     def execute(self):
         data = []
         if self.name == "plants":
@@ -174,22 +178,32 @@ class MockSupabaseTable:
                         "created_at": "2026-06-25T12:00:00+00:00"
                     }
                 ]
+            elif any(q[0] == "insert" for q in self.queries):
+                insert_val = next(q[1] for q in self.queries if q[0] == "insert")
+                data = [
+                    {
+                        "id": insert_val.get("id", str(uuid.uuid4())),
+                        "user_id": insert_val["user_id"],
+                        "plant_id": insert_val.get("plant_id"),
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                ]
         elif self.name == "chat_messages":
             if any(q[0] == "select" for q in self.queries):
                 data = [
                     {
                         "id": "e3b07384-d113-49c3-a558-1ec114a84d45",
                         "session_id": "e3b07384-d113-49c3-a558-1ec114a84d44",
-                        "sender": "user",
-                        "content": "식물이 아파요",
+                        "role": "user",
+                        "content": {"text": "식물이 아파요"},
                         "citations": [],
                         "created_at": "2026-06-25T12:01:00+00:00"
                     },
                     {
                         "id": "e3b07384-d113-49c3-a558-1ec114a84d46",
                         "session_id": "e3b07384-d113-49c3-a558-1ec114a84d44",
-                        "sender": "assistant",
-                        "content": "물을 주세요.",
+                        "role": "assistant",
+                        "content": {"text": "물을 주세요."},
                         "citations": [
                             {
                                 "sourceId": "RAG-DOC-999",
@@ -199,6 +213,18 @@ class MockSupabaseTable:
                             }
                         ],
                         "created_at": "2026-06-25T12:02:00+00:00"
+                    }
+                ]
+            elif any(q[0] == "insert" for q in self.queries):
+                insert_val = next(q[1] for q in self.queries if q[0] == "insert")
+                data = [
+                    {
+                        "id": insert_val.get("id", str(uuid.uuid4())),
+                        "session_id": insert_val["session_id"],
+                        "role": insert_val["role"],
+                        "content": insert_val["content"],
+                        "citations": insert_val.get("citations", []),
+                        "created_at": datetime.now(timezone.utc).isoformat()
                     }
                 ]
         elif self.name == "plant_catalog":
@@ -218,6 +244,18 @@ class MockSupabaseTable:
                         item for item in mock_catalog
                         if search_term in item["name"].lower() or search_term in item["species"].lower()
                     ]
+        elif self.name == "rpc_match_rag_chunks":
+            data = [
+                {
+                    "id": "e3b07384-d113-49c3-a558-1ec114a84d47",
+                    "source_id": "f1b07384-d113-49c3-a558-1ec114a84d01",
+                    "title": "실내정원 유지관리 가이드라인 - 물관리 요령",
+                    "url": "https://www.nihhs.go.kr",
+                    "publisher": "국립원예특작과학원",
+                    "content": "실내 식물 관리에서 가장 빈번하게 발생하는 이상 증상은 '과습'입니다. 몬스테라는 잎이 노랗게 변하고 무르는 황화 현상이 생길 수 있습니다.",
+                    "similarity": 0.85
+                }
+            ]
         return MockAPIResponse(data)
 
 class MockSupabaseStorageBucket:
@@ -242,6 +280,11 @@ class MockSupabaseClient:
 
     def table(self, name):
         return MockSupabaseTable(name)
+
+    def rpc(self, name, params):
+        mock_table = MockSupabaseTable(f"rpc_{name}")
+        mock_table.queries.append(("rpc", name, params))
+        return mock_table
 
 # FastAPI 의존성 주입 오버라이드
 app.dependency_overrides[get_current_user] = lambda: TEST_USER_ID
@@ -313,6 +356,7 @@ def test_consult_plant_care():
         "question": "잎 끝이 노랗게 변하는 이유가 뭘까요?"
     }
     response = client.post("/api/v1/chat/plant-care", json=payload)
+    print("@@@ ERROR DETAIL:", response.json())
     assert response.status_code == 200
     data = response.json()
     assert "summary" in data
