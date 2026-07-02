@@ -1,0 +1,399 @@
+<!DOCTYPE html><html class="light" lang="ko" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>신규 식물 등록 | Farm하니?</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary": "#4a4839",
+                    "inverse-surface": "#2e3132",
+                    "tertiary-fixed-dim": "#ccc6b3",
+                    "sage-accent": "#95D5B2",
+                    "error": "#ba1a1a",
+                    "outline-variant": "#bfc9c1",
+                    "on-tertiary-fixed": "#1e1c10",
+                    "on-tertiary-container": "#dfdac6",
+                    "on-surface": "#191c1d",
+                    "primary-fixed-dim": "#95d4b3",
+                    "inverse-primary": "#95d4b3",
+                    "on-error": "#ffffff",
+                    "on-tertiary-fixed-variant": "#4a4738",
+                    "on-primary-fixed": "#002114",
+                    "surface-container-low": "#f3f4f5",
+                    "on-surface-variant": "#404943",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-fixed-variant": "#474839",
+                    "secondary-fixed": "#e4e4cf",
+                    "on-primary-fixed-variant": "#0e5138",
+                    "outline": "#707973",
+                    "on-background": "#191c1d",
+                    "secondary-container": "#e4e4cf",
+                    "tertiary-container": "#635f50",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed-dim": "#c8c8b4",
+                    "surface": "#f8f9fa",
+                    "primary-container": "#2d6a4f",
+                    "tertiary-fixed": "#e8e2cf",
+                    "earth-deep": "#6B705C",
+                    "on-error-container": "#93000a",
+                    "surface-variant": "#e1e3e4",
+                    "surface-bright": "#f8f9fa",
+                    "surface-tint": "#2c694e",
+                    "surface-container-highest": "#e1e3e4",
+                    "primary": "#0f5238",
+                    "growth-light": "#D8E2DC",
+                    "surface-container-high": "#e7e8e9",
+                    "background": "#f8f9fa",
+                    "error-container": "#ffdad6",
+                    "on-primary": "#ffffff",
+                    "primary-fixed": "#b1f0ce",
+                    "secondary": "#5f5f50",
+                    "surface-dim": "#d9dadb",
+                    "on-secondary-fixed": "#1b1d10",
+                    "inverse-on-surface": "#f0f1f2",
+                    "on-primary-container": "#a8e7c5",
+                    "on-secondary": "#ffffff",
+                    "surface-container": "#edeeef",
+                    "diagnostic-red": "#E07A5F",
+                    "on-secondary-container": "#656555"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "gutter-md": "24px",
+                    "max-width": "1200px",
+                    "margin-sm": "20px",
+                    "base": "8px",
+                    "margin-lg": "40px",
+                    "gutter-sm": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["inter"],
+                    "label-md": ["inter"],
+                    "headline-lg-mobile": ["manrope"],
+                    "display-lg": ["manrope"],
+                    "headline-md": ["manrope"],
+                    "body-lg": ["inter"],
+                    "label-sm": ["inter"],
+                    "headline-lg": ["manrope"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Inter', 'Manrope', sans-serif;
+            overflow-x: hidden;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .step-transition {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-gutter-md bg-surface-container-lowest dark:bg-inverse-surface h-16 shadow-sm dark:shadow-none">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2">
+  <div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container text-3xl" style="font-variation-settings: &quot;FILL&quot; 1;">potted_plant</span>
+</div>
+  <span class="font-bold text-xl text-primary-container">Farm하니?</span>
+</div>
+</div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="text-on-surface-variant dark:text-outline-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 font-label-md text-label-md" href="#">내 식물</a>
+<a class="text-on-surface-variant dark:text-outline-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 font-label-md text-label-md" href="#">AI 상담</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined p-2 text-on-surface-variant hover:bg-growth-light rounded-full transition-all">notifications</button>
+<button class="material-symbols-outlined p-2 text-on-surface-variant hover:bg-growth-light rounded-full transition-all" onclick="document.documentElement.classList.toggle('dark')">dark_mode</button><button class="material-symbols-outlined p-2 text-on-surface-variant hover:bg-growth-light rounded-full transition-all">settings</button>
+<div class="w-6 h-6 rounded-full bg-primary-fixed flex items-center justify-center overflow-hidden border border-outline-variant/30">
+<img alt="사용자 프로필 사진" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCMVifnzxm5IhVbdugKWE9a1-3z-4E-DCrSFpMZxfbeahApIgYWyr4z3anWq01FODOwZNXBaN0L7wrFDVdvAyxjXGitkl2QNNAdAtmcmtrFwseEfZtlWa9_OrpCCRe5_iSY0--06y9SIEe_SeDoEDhmt-y3jLfDkcuGC0DOX6No-d0AdXoCaTIm5uNJO8uJ08FpXbrBqIxFnr26-2T94Q-mfaMMSxDjLkw7zibw7IExOsAAEOlhEaAW">
+</div>
+</div>
+</header>
+<main class="flex-grow pt-24 pb-12 px-gutter-sm md:px-gutter-md">
+<div class="max-w-3xl mx-auto">
+<!-- Stepper Indicator -->
+<div class="mb-12 flex justify-between items-center relative px-4">
+<div class="absolute top-1/2 left-0 w-full h-0.5 bg-outline-variant -z-10 -translate-y-1/2"></div>
+<div class="absolute top-1/2 left-0 h-0.5 bg-primary -z-10 -translate-y-1/2 transition-all duration-500" id="step-line-fill" style="width: 0%"></div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-10 h-10 rounded-full flex items-center justify-center bg-primary text-on-primary font-bold shadow-lg transition-all" id="dot-1">1</div>
+<span class="font-label-sm text-label-sm text-primary">정체성</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-10 h-10 rounded-full flex items-center justify-center bg-surface-container-high text-on-surface-variant font-bold transition-all" id="dot-2">2</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">품종</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-10 h-10 rounded-full flex items-center justify-center bg-surface-container-high text-on-surface-variant font-bold transition-all" id="dot-3">3</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">관리 이력</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-10 h-10 rounded-full flex items-center justify-center bg-surface-container-high text-on-surface-variant font-bold transition-all" id="dot-4">4</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">프로필</span>
+</div>
+</div>
+<!-- Form Container -->
+<div class="bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-sm overflow-hidden min-h-[450px] flex flex-col relative" id="form-card">
+<!-- Step 1: Name -->
+<section class="step-transition opacity-100 flex-grow p-8 md:p-12" id="step-1">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-2">식물의 이름을 지어주세요</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mb-8">정원의 모든 식물에게는 특별한 이름이 필요합니다.</p>
+<div class="space-y-6">
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-2 ml-1" for="plant-name">식물 별명</label>
+<input class="w-full h-14 bg-surface-container-low border-none rounded-lg px-4 text-body-lg focus:ring-2 focus:ring-primary-container transition-all" id="plant-name" oninput="document.getElementById('preview-name').innerText = this.value || '새로운 식물'" placeholder="예: 초록이, 광합성왕" type="text">
+</div>
+<div class="flex items-center gap-3 p-4 bg-growth-light/30 rounded-lg border border-primary/10">
+<span class="material-symbols-outlined text-primary">info</span>
+<p class="font-label-sm text-label-sm text-primary">이름을 지어주면 관리 요건과 건강 상태를 더 효과적으로 추적할 수 있습니다.</p>
+</div><div class="mt-8 p-6 bg-surface-container-low rounded-xl border border-outline-variant/30">
+<p class="text-label-sm font-label-sm text-on-surface-variant mb-4">미리보기</p>
+<div class="flex items-center gap-4 bg-white p-4 rounded-lg shadow-sm">
+<div class="w-12 h-12 rounded-full bg-sage-accent/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">potted_plant</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-primary" id="preview-name">새로운 식물</h3>
+<p class="text-label-sm text-on-surface-variant">방금 등록됨</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Step 2: Species -->
+<section class="step-transition hidden opacity-0 flex-grow p-8 md:p-12" id="step-2">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-2">어떤 품종인가요?</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mb-8">정확한 품종 선택은 AI가 더 맞춤화된 진단과 케어를 제공하는 데 도움이 됩니다.</p>
+<div class="relative">
+<label class="block font-label-md text-label-md text-on-surface-variant mb-2 ml-1" for="species-search">검색 또는 선택</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full h-14 bg-surface-container-low border-none rounded-lg pl-12 pr-4 text-body-lg focus:ring-2 focus:ring-primary-container transition-all" id="species-search" placeholder="수천 가지 품종 검색..." type="text">
+</div>
+<div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+<button class="flex items-center gap-3 p-3 rounded-lg border border-outline-variant hover:border-primary hover:bg-growth-light/20 transition-all text-left">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">potted_plant</span>
+<div>
+<p class="font-label-md text-label-md">몬스테라 델리시오사</p>
+<p class="text-xs text-on-surface-variant">Monstera Deliciosa</p>
+</div>
+</button>
+<button class="flex items-center gap-3 p-3 rounded-lg border border-outline-variant hover:border-primary hover:bg-growth-light/20 transition-all text-left">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">eco</span>
+<div>
+<p class="font-label-md text-label-md">인도고무나무</p>
+<p class="text-xs text-on-surface-variant">Ficus Elastica</p>
+</div>
+</button>
+</div>
+</div>
+</section>
+<!-- Step 3: History -->
+<section class="step-transition hidden opacity-0 flex-grow p-8 md:p-12" id="step-3">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-2">언제부터 함께하셨나요?</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mb-8">식물의 연령을 알면 성장 주기를 이해하는 데 도움이 됩니다.</p>
+<div class="space-y-6">
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-2 ml-1" for="purchase-date">들여온 날짜</label>
+<input class="w-full h-14 bg-surface-container-low border-none rounded-lg px-4 text-body-lg focus:ring-2 focus:ring-primary-container transition-all" id="purchase-date" type="date">
+</div>
+<div class="flex items-center gap-4">
+<button class="px-4 py-2 rounded-full border border-outline-variant font-label-sm text-label-sm hover:bg-surface-container transition-all">오늘</button>
+<button class="px-4 py-2 rounded-full border border-outline-variant font-label-sm text-label-sm hover:bg-surface-container transition-all">지난주</button>
+<button class="px-4 py-2 rounded-full border border-outline-variant font-label-sm text-label-sm hover:bg-surface-container transition-all">오래전부터</button>
+</div>
+</div>
+</section>
+<!-- Step 4: Photo -->
+<section class="step-transition hidden opacity-0 flex-grow p-8 md:p-12" id="step-4">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-2">프로필 사진을 추가하세요</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mb-8">초기 시각적 기록은 향후 건강 상태 모니터링에 필수적입니다.</p>
+<div class="border-2 border-dashed border-sage-accent/50 rounded-xl bg-growth-light/10 p-12 flex flex-col items-center justify-center transition-all hover:bg-growth-light/20 cursor-pointer group">
+<div class="w-16 h-16 rounded-full bg-primary-fixed flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary text-3xl">add_a_photo</span>
+</div>
+<p class="font-label-md text-label-md text-primary mb-1">클릭하여 업로드하거나 파일을 끌어다 놓으세요</p>
+<p class="text-xs text-on-surface-variant">PNG, JPG 또는 WEBP (최대 5MB)</p>
+</div>
+</section>
+<!-- Step Success -->
+<section class="step-transition hidden opacity-0 flex-grow p-8 md:p-12 flex flex-col items-center justify-center text-center" id="step-success">
+<div class="w-24 h-24 bg-sage-accent/20 rounded-full flex items-center justify-center mb-6 animate-bounce">
+<span class="material-symbols-outlined text-primary text-5xl" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<h2 class="font-headline-lg text-headline-lg text-primary mb-4">정원에 성공적으로 등록되었습니다!</h2>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-md mx-auto mb-10">식물 등록이 완료되었습니다. AI가 정보를 분석하여 첫 번째 관리 일정을 준비하고 있습니다.</p>
+<div class="flex flex-col sm:flex-row gap-4 w-full justify-center">
+<a class="inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-on-primary rounded-lg font-label-md text-label-md shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all" href="#">
+                        대시보드로 이동
+                        <span class="material-symbols-outlined">arrow_forward</span>
+</a>
+<button class="px-8 py-4 bg-surface-container-high text-on-surface-variant rounded-lg font-label-md text-label-md hover:bg-surface-dim transition-all" onclick="resetForm()">다른 식물 추가</button>
+</div>
+</section>
+<!-- Navigation Controls -->
+<div class="p-6 md:p-8 bg-surface-container-low border-t border-outline-variant/10 flex items-center justify-between" id="form-nav">
+<button class="flex items-center gap-2 px-6 py-3 font-label-md text-label-md text-on-surface-variant hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all" disabled="" id="prev-btn" onclick="prevStep()">
+<span class="material-symbols-outlined">arrow_back</span>
+                    이전
+                </button>
+<div class="flex items-center gap-2">
+<button class="px-6 py-3 font-label-md text-label-md text-on-surface-variant hover:text-primary transition-all" id="skip-btn" onclick="nextStep()">건너뛰기</button>
+<button class="flex items-center gap-2 px-8 py-3 bg-primary text-on-primary rounded-lg font-label-md text-label-md shadow-md hover:shadow-lg active:scale-95 transition-all" id="next-btn" onclick="nextStep()">계속하기 <span class="material-symbols-outlined">arrow_forward</span></button>
+</div>
+</div>
+</div>
+<!-- Contextual Tip -->
+<div class="mt-8 flex items-start gap-4 p-6 bg-white/50 border border-outline-variant/20 rounded-xl" id="tip-container">
+<div class="w-10 h-10 rounded-full bg-tertiary-fixed flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-tertiary">lightbulb</span>
+</div>
+<div>
+<h4 class="font-label-md text-label-md text-on-surface mb-1">가드너의 꿀팁</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">등록 시 사진을 추가하면 'Day Zero' 기록이 생성됩니다. 우리 AI는 이를 사용하여 성장 추세를 추적하고 사람의 눈보다 빠르게 잎의 변색을 감지합니다.</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="w-full py-8 mt-auto bg-surface-container-high dark:bg-inverse-surface">
+<div class="w-full max-w-max-width mx-auto px-gutter-md flex flex-col md:flex-row justify-between items-center gap-4">
+<span class="text-label-md font-label-md font-bold text-on-surface-variant">© 2024 Farm하니?. 지능적인 관리를 통한 성장의 즐거움.</span>
+<div class="flex gap-8">
+<a class="text-label-sm font-label-sm text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim underline transition-all" href="#">개인정보 처리방침</a>
+<a class="text-label-sm font-label-sm text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim underline transition-all" href="#">이용약관</a>
+<a class="text-label-sm font-label-sm text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim underline transition-all" href="#">지원</a>
+</div>
+</div>
+</footer>
+<script>
+    let currentStep = 1;
+    const totalSteps = 4;
+
+    function updateUI() {
+        // Hide/Show sections
+        for (let i = 1; i <= totalSteps; i++) {
+            const section = document.getElementById(`step-${i}`);
+            if (i === currentStep) {
+                section.classList.remove('hidden');
+                setTimeout(() => section.classList.replace('opacity-0', 'opacity-100'), 10);
+            } else {
+                section.classList.add('hidden');
+                section.classList.replace('opacity-100', 'opacity-0');
+            }
+        }
+
+        // Update Stepper
+        document.getElementById('step-line-fill').style.width = `${((currentStep - 1) / (totalSteps - 1)) * 100}%`;
+        
+        for (let i = 1; i <= totalSteps; i++) {
+            const dot = document.getElementById(`dot-${i}`);
+            const label = dot.nextElementSibling;
+            
+            if (i < currentStep) {
+                dot.classList.remove('bg-surface-container-high', 'bg-primary', 'text-on-surface-variant');
+                dot.classList.add('bg-primary', 'text-on-primary');
+                dot.innerHTML = '<span class="material-symbols-outlined">check</span>';
+                label.classList.replace('text-on-surface-variant', 'text-primary');
+            } else if (i === currentStep) {
+                dot.classList.remove('bg-surface-container-high', 'text-on-surface-variant');
+                dot.classList.add('bg-primary', 'text-on-primary');
+                dot.innerText = i;
+                label.classList.replace('text-on-surface-variant', 'text-primary');
+            } else {
+                dot.classList.add('bg-surface-container-high', 'text-on-surface-variant');
+                dot.classList.remove('bg-primary', 'text-on-primary');
+                dot.innerText = i;
+                label.classList.replace('text-primary', 'text-on-surface-variant');
+            }
+        }
+
+        // Button visibility
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const skipBtn = document.getElementById('skip-btn');
+
+        prevBtn.disabled = currentStep === 1;
+        
+        if (currentStep === totalSteps) {
+            nextBtn.innerHTML = '등록 완료 <span class="material-symbols-outlined">celebration</span>';
+        } else {
+            nextBtn.innerHTML = '계속하기 <span class="material-symbols-outlined">arrow_forward</span>';
+        }
+    }
+
+    function nextStep() {
+        if (currentStep < totalSteps) {
+            currentStep++;
+            updateUI();
+        } else {
+            showSuccess();
+        }
+    }
+
+    function prevStep() {
+        if (currentStep > 1) {
+            currentStep--;
+            updateUI();
+        }
+    }
+
+    function showSuccess() {
+        document.getElementById('form-nav').classList.add('hidden');
+        document.getElementById('tip-container').classList.add('hidden');
+        for (let i = 1; i <= totalSteps; i++) {
+            document.getElementById(`step-${i}`).classList.add('hidden');
+        }
+        
+        const success = document.getElementById('step-success');
+        success.classList.remove('hidden');
+        setTimeout(() => success.classList.replace('opacity-0', 'opacity-100'), 10);
+    }
+
+    function resetForm() {
+        currentStep = 1;
+        document.getElementById('form-nav').classList.remove('hidden');
+        document.getElementById('tip-container').classList.remove('hidden');
+        document.getElementById('step-success').classList.add('hidden');
+        document.getElementById('step-success').classList.replace('opacity-100', 'opacity-0');
+        updateUI();
+    }
+
+    // Initialize UI
+    updateUI();
+</script>
+
+
+
+
+</body></html>
