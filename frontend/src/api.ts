@@ -350,6 +350,7 @@ export async function askPlantCare(
   options: {
     careLogId?: string;
     photoId?: string;
+    sessionId?: string;
     newSession?: boolean;
     responseMode?: ChatResponseMode;
     recentMessages?: ChatMemoryMessage[];
@@ -365,6 +366,7 @@ export async function askPlantCare(
       plantId,
       careLogId: options.careLogId,
       photoId: options.photoId,
+      sessionId: options.sessionId,
       newSession: options.newSession ?? false,
       responseMode: options.responseMode ?? "expert",
       recentMessages: options.recentMessages ?? [],

@@ -19,6 +19,7 @@ class PlantCareChatRequest(BaseModel):
     plantId: UUID = Field(..., description="상담 대상 식물의 UUID")
     careLogId: Optional[UUID] = Field(None, description="참조할 재배 일지의 UUID")
     photoId: Optional[UUID] = Field(None, description="참조할 식물 사진의 UUID")
+    sessionId: Optional[UUID] = Field(None, description="이어갈 특정 상담 세션 UUID. 지정 시 해당 상담방의 대화 맥락을 우선 사용")
     newSession: bool = Field(False, description="기존 식물 상담 세션을 재사용하지 않고 새 상담방을 생성할지 여부")
     responseMode: Literal["expert", "companion"] = Field("expert", description="답변 말투 모드. expert=전문가 상담, companion=내 식물과 대화")
     recentMessages: List[ChatMemoryMessage] = Field(default_factory=list, description="DB 세션 이력 보조용 최근 대화 메모리")

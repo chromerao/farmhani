@@ -86,7 +86,17 @@ def tokenize_query(query: str) -> List[str]:
 
 
 def specific_query_terms(query: str) -> List[str]:
-    return [token for token in tokenize_query(query) if token not in CARE_TERMS and len(token) >= 2]
+    particles = ["는", "은", "를", "을", "가", "이", "의", "에", "와", "과", "로", "으로", "에서"]
+    specific = []
+    for token in tokenize_query(query):
+        cleaned = token
+        for particle in particles:
+            if token.endswith(particle) and len(token) > len(particle):
+                cleaned = token[: -len(particle)]
+                break
+        if cleaned not in CARE_TERMS and len(cleaned) >= 2:
+            specific.append(cleaned)
+    return specific
 
 
 def filter_by_specific_terms(query: str, results: List[SearchResult]) -> List[SearchResult]:

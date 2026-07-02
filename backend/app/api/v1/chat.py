@@ -54,7 +54,8 @@ async def consult_plant_care(
             question=request.question,
             new_session=request.newSession,
             response_mode=request.responseMode,
-            recent_messages=[message.model_dump() for message in request.recentMessages]
+            recent_messages=[message.model_dump() for message in request.recentMessages],
+            session_id=str(request.sessionId) if request.sessionId else None
         )
         
         citations = []

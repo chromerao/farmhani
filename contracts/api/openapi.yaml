@@ -412,6 +412,10 @@ components:
         photoId:
           type: string
           format: uuid
+        sessionId:
+          type: string
+          format: uuid
+          description: 이어갈 특정 상담 세션 UUID
         newSession:
           type: boolean
           default: false

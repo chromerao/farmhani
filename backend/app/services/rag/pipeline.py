@@ -95,6 +95,7 @@ class AgentState(TypedDict):
     response_mode: str
     request_chat_history: List[Dict[str, Any]]
     chat_history: List[Dict[str, Any]]
+    target_session_id: Optional[str]
     
     # 런타임 획득 정보
     plant_data: Dict[str, Any]
@@ -168,21 +169,35 @@ def load_chat_history(state: AgentState) -> Dict[str, Any]:
     ]
 
     if state.get("new_session"):
-        return {"chat_history": request_history[-12:]}
+        return {"chat_history": request_history[-12:], "session_id": None}
 
     try:
-        session_res = (
-            db.table("chat_sessions")
-            .select("id")
-            .eq("user_id", user_id)
-            .eq("plant_id", plant_id)
-            .like("title", f"{prefix}%")
-            .order("created_at", desc=True)
-            .limit(1)
-            .execute()
-        )
+        target_session_id = state.get("target_session_id")
+        if target_session_id:
+            session_res = (
+                db.table("chat_sessions")
+                .select("id")
+                .eq("id", target_session_id)
+                .eq("user_id", user_id)
+                .eq("plant_id", plant_id)
+                .limit(1)
+                .execute()
+            )
+            if not session_res.data:
+                raise ValueError("상담 세션을 찾을 수 없거나 해당 세션에 대한 권한이 없습니다.")
+        else:
+            session_res = (
+                db.table("chat_sessions")
+                .select("id")
+                .eq("user_id", user_id)
+                .eq("plant_id", plant_id)
+                .like("title", f"{prefix}%")
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
         if not session_res.data:
-            return {"chat_history": []}
+            return {"chat_history": request_history[-12:], "session_id": None}
 
         session_id = session_res.data[0]["id"]
         messages_res = (
@@ -196,7 +211,16 @@ def load_chat_history(state: AgentState) -> Dict[str, Any]:
         history = []
         for item in reversed(messages_res.data or []):
             content = item.get("content")
-            text = content.get("text", "") if isinstance(content, dict) else str(content or "")
+            if isinstance(content, dict):
+                text = content.get("text", "")
+                image_analysis = content.get("imageAnalysis")
+                image_signals = content.get("imageSignals")
+                if image_analysis:
+                    text = f"{text}\n[이전에 첨부한 사진 분석: {image_analysis}]".strip()
+                if image_signals:
+                    text = f"{text}\n[이전 사진 관찰 신호: {', '.join(str(signal) for signal in image_signals)}]".strip()
+            else:
+                text = str(content or "")
             if text.strip():
                 history.append({
                     "role": item.get("role") or item.get("sender") or "user",
@@ -211,10 +235,12 @@ def load_chat_history(state: AgentState) -> Dict[str, Any]:
                 continue
             seen.add(key)
             deduped.append(item)
-        return {"chat_history": deduped[-12:]}
+        return {"chat_history": deduped[-12:], "session_id": session_id}
     except Exception as exc:
+        if isinstance(exc, ValueError):
+            raise
         logger.warning("Chat memory unavailable: %s", exc)
-        return {"chat_history": request_history[-12:]}
+        return {"chat_history": request_history[-12:], "session_id": None}
 
 # 2. extract_image_signals 노드
 def extract_image_signals(state: AgentState) -> Dict[str, Any]:
@@ -404,7 +430,15 @@ def grade_or_rerank(state: AgentState) -> Dict[str, Any]:
                 model=os.getenv("CHAT_MODEL") or settings.CHAT_MODEL,
                 temperature=0.0,
                 messages=[
-                    {"role": "system", "content": "사용자가 특정 식물/작물에 대해 묻는 경우, 문서가 같은 식물/작물 또는 일반 관리 원칙에 직접 도움이 될 때만 'yes'를 출력하세요. 다른 식물/작물 전용 문서면 'no'만 출력하세요."},
+                    {
+                        "role": "system",
+                        "content": (
+                            "당신은 RAG 시스템의 문서 관련성 평가기입니다. 사용자의 질문에 답하기 위해 주어진 문서가 유용한지 판별합니다. "
+                            "사용자가 특정 식물/작물에 대해 묻는 경우, 문서가 같은 식물/작물이거나 질문에 직접 도움이 되는 일반 관리 원칙을 담을 때만 'yes'를 출력하세요. "
+                            "문서가 다른 식물/작물 전용이고 현재 질문과 무관하면 무조건 'no'를 출력하세요. "
+                            "결과는 오직 'yes' 또는 'no'만 출력하세요."
+                        )
+                    },
                     {"role": "user", "content": f"식물/작물: {plant_label}\n질문: {question}\n\n문서 제목: {(doc.get('metadata') or {}).get('title')}\n문서 내용: {doc.get('content')}"}
                 ]
             )
@@ -750,7 +784,15 @@ def persist_result(state: AgentState) -> Dict[str, Any]:
 
     try:
         session_res = None
-        if not state.get("new_session"):
+        session_id = state.get("session_id")
+        if session_id and not state.get("new_session"):
+            try:
+                existing = db.table("chat_sessions").select("title").eq("id", session_id).eq("user_id", user_id).limit(1).execute()
+                if existing.data and not existing.data[0].get("title"):
+                    db.table("chat_sessions").update({"title": make_mode_session_title(state["plant_data"], question, response_mode)}).eq("id", session_id).execute()
+            except Exception:
+                pass
+        elif not state.get("new_session"):
             session_res = (
                 db.table("chat_sessions")
                 .select("id,title")
@@ -762,7 +804,9 @@ def persist_result(state: AgentState) -> Dict[str, Any]:
                 .execute()
             )
 
-        if session_res and session_res.data:
+        if session_id:
+            pass
+        elif session_res and session_res.data:
             session_id = session_res.data[0]["id"]
             if not session_res.data[0].get("title"):
                 try:
@@ -780,11 +824,18 @@ def persist_result(state: AgentState) -> Dict[str, Any]:
             session_id = new_session["id"]
 
         user_msg_id = str(uuid.uuid4())
+        user_content: Dict[str, Any] = {"text": question}
+        if state.get("photo_id"):
+            user_content["photoId"] = state.get("photo_id")
+        if state.get("image_description"):
+            user_content["imageAnalysis"] = state.get("image_description")
+        if state.get("image_signals"):
+            user_content["imageSignals"] = state.get("image_signals")
         user_message_payload = {
             "id": user_msg_id,
             "session_id": session_id,
             "role": "user",
-            "content": {"text": question},
+            "content": user_content,
             "citations": []
         }
         try:
@@ -850,7 +901,8 @@ def run_rag_workflow(
     question: str,
     new_session: bool = False,
     response_mode: str = "expert",
-    recent_messages: Optional[List[Dict[str, Any]]] = None
+    recent_messages: Optional[List[Dict[str, Any]]] = None,
+    session_id: Optional[str] = None
 ) -> Dict[str, Any]:
     workflow = StateGraph(AgentState)
     
@@ -888,7 +940,8 @@ def run_rag_workflow(
         "question": question,
         "response_mode": response_mode if response_mode in {"expert", "companion"} else "expert",
         "request_chat_history": recent_messages or [],
-        "new_session": new_session
+        "new_session": new_session,
+        "target_session_id": session_id
     }
     
     result = app.invoke(initial_state)

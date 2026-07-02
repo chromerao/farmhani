@@ -1,0 +1,80 @@
+[
+  {
+    "id": "single_1",
+    "type": "단일 문서 정답형",
+    "question": "몬스테라는 물을 얼마나 자주 주어야 하나요?",
+    "expected_concept": "겉흙이 말랐을 때 충분히 준다"
+  },
+  {
+    "id": "single_2",
+    "type": "단일 문서 정답형",
+    "question": "스킨답서스는 직사광선에 둬도 되나요?",
+    "expected_concept": "직사광선을 피하고 반양지/반음지에 둔다"
+  },
+  {
+    "id": "single_3",
+    "type": "단일 문서 정답형",
+    "question": "다육식물 겨울철 관리는 어떻게 해야 하나요?",
+    "expected_concept": "물주기를 대폭 줄이고 영상 기온을 유지한다"
+  },
+  {
+    "id": "multi_1",
+    "type": "다중 문서 종합형",
+    "question": "응애 벌레와 깍지벌레가 생겼을 때 나타나는 잎 증상의 차이점이 뭔가요?",
+    "expected_concept": "응애는 거미줄이나 미세한 흰 반점, 깍지벌레는 끈적임이나 솜뭉치 같은 형태"
+  },
+  {
+    "id": "multi_2",
+    "type": "다중 문서 종합형",
+    "question": "잎이 노랗게 변하는게 과습 때문인지 영양 부족 때문인지 어떻게 구분하나요?",
+    "expected_concept": "과습은 전체적으로 눅눅하게 변하고 흙이 안 마름, 영양 부족은 오래된 잎부터 색이 연해짐"
+  },
+  {
+    "id": "multi_3",
+    "type": "다중 문서 종합형",
+    "question": "건조할 때랑 과습일 때 줄기가 처지는 현상은 어떻게 다른가요?",
+    "expected_concept": "건조는 잎이 바스락거리며 얇게 처지고, 과습은 줄기 밑동이 무르며 처짐"
+  },
+  {
+    "id": "reject_1",
+    "type": "문서 외 질문 (거절)",
+    "question": "우리 집 강아지가 초콜릿을 먹었는데 어떻게 응급처치 해야 하나요?",
+    "expected_concept": "식물 관리와 무관하여 답할 수 없음 (거절)"
+  },
+  {
+    "id": "reject_2",
+    "type": "문서 외 질문 (거절)",
+    "question": "아이폰 배터리를 오래 쓰는 방법 좀 알려주세요.",
+    "expected_concept": "식물 관리와 무관하여 답할 수 없음 (거절)"
+  },
+  {
+    "id": "reject_3",
+    "type": "문서 외 질문 (거절)",
+    "question": "요즘 기침이 심한데 먹을 만한 감기약 추천해줄 수 있나요?",
+    "expected_concept": "식물 관리와 무관하여 답할 수 없음 (거절)"
+  },
+  {
+    "id": "image_1",
+    "type": "이미지 진단형",
+    "question": "잎 사진을 찍어봤는데 잎 가장자리 색이 좀 이상한 것 같아요. 상태 좀 봐주세요.",
+    "image_file": "leaf_yellow_edges.png",
+    "image_note": "잎 가장자리와 잎끝이 노랗게 변한 합성 잎 이미지",
+    "expected_concept": "잎 가장자리/잎끝 황화 관찰, 과습·영양·빛 관련 원인 후보와 관찰 가이드 제시"
+  },
+  {
+    "id": "image_2",
+    "type": "이미지 진단형",
+    "question": "잎에 갈색 반점 같은 게 생겼어요. 병에 걸린 건가요?",
+    "image_file": "leaf_brown_spots.png",
+    "image_note": "잎 표면에 갈색 원형 반점이 여러 개 있는 합성 잎 이미지",
+    "expected_concept": "갈색 반점 관찰, 병해충 '가능성' 수준 안내와 확정 진단 회피"
+  },
+  {
+    "id": "image_3",
+    "type": "이미지 진단형",
+    "question": "우리 식물 건강 상태 어때 보이나요?",
+    "image_file": "leaf_healthy.png",
+    "image_note": "특이 증상이 없는 건강한 초록 잎 합성 이미지",
+    "expected_concept": "뚜렷한 이상 증상 없음, 기본 관리 유지 안내"
+  }
+]
