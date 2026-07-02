@@ -1,0 +1,255 @@
+<!DOCTYPE html><html class="light" lang="ko" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>시작하기 - Farm하니?</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Use predicted brand anchors/style guidance -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-container": "#a8e7c5",
+                    "surface-dim": "#d9dadb",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-low": "#f3f4f5",
+                    "inverse-primary": "#95d4b3",
+                    "surface-container": "#edeeef",
+                    "surface-bright": "#f8f9fa",
+                    "tertiary": "#4a4839",
+                    "on-surface": "#191c1d",
+                    "on-surface-variant": "#404943",
+                    "secondary-container": "#e4e4cf",
+                    "secondary-fixed-dim": "#c8c8b4",
+                    "on-primary-fixed-variant": "#0e5138",
+                    "outline": "#707973",
+                    "on-secondary-container": "#656555",
+                    "earth-deep": "#6B705C",
+                    "on-tertiary-fixed-variant": "#4a4738",
+                    "surface-container-high": "#e7e8e9",
+                    "primary-fixed-dim": "#95d4b3",
+                    "surface-variant": "#e1e3e4",
+                    "surface-container-highest": "#e1e3e4",
+                    "secondary": "#5f5f50",
+                    "primary-container": "#2d6a4f",
+                    "surface-container-lowest": "#ffffff",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed": "#e8e2cf",
+                    "on-primary": "#ffffff",
+                    "sage-accent": "#95D5B2",
+                    "on-secondary-fixed": "#1b1d10",
+                    "on-error-container": "#93000a",
+                    "tertiary-container": "#635f50",
+                    "primary-fixed": "#b1f0ce",
+                    "on-secondary": "#ffffff",
+                    "diagnostic-red": "#E07A5F",
+                    "surface-tint": "#2c694e",
+                    "on-tertiary-container": "#dfdac6",
+                    "on-background": "#191c1d",
+                    "growth-light": "#D8E2DC",
+                    "on-tertiary-fixed": "#1e1c10",
+                    "surface": "#f8f9fa",
+                    "inverse-on-surface": "#f0f1f2",
+                    "tertiary-fixed-dim": "#ccc6b3",
+                    "error": "#ba1a1a",
+                    "error-container": "#ffdad6",
+                    "secondary-fixed": "#e4e4cf",
+                    "outline-variant": "#bfc9c1",
+                    "inverse-surface": "#2e3132",
+                    "primary": "#0f5238",
+                    "on-primary-fixed": "#002114",
+                    "background": "#f8f9fa",
+                    "on-secondary-fixed-variant": "#474839"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-lg": "40px",
+                    "base": "8px",
+                    "gutter-sm": "16px",
+                    "max-width": "1200px",
+                    "margin-sm": "20px",
+                    "gutter-md": "24px"
+            },
+            "fontFamily": {
+                    "headline-lg-mobile": ["manrope"],
+                    "body-lg": ["inter"],
+                    "label-sm": ["inter"],
+                    "label-md": ["inter"],
+                    "headline-md": ["manrope"],
+                    "body-md": ["inter"],
+                    "headline-lg": ["manrope"],
+                    "display-lg": ["manrope"]
+            },
+            "fontSize": {
+                    "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .auth-card {
+            backdrop-filter: blur(8px);
+            background-color: rgba(255, 255, 255, 0.9);
+        }
+        .transition-soft {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md min-h-screen selection:bg-sage-accent/30 overflow-x-hidden">
+<!-- TopNavBar (Shell - Content Only, profile suppressed as per prompt) -->
+<header class="fixed top-0 left-0 w-full z-50 h-16 px-gutter-md flex items-center justify-between bg-surface-container-lowest shadow-sm">
+<div class="flex items-center gap-2"><div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">potted_plant</span>
+<span class="text-xl font-bold text-primary-container" style="font-family: Manrope, sans-serif;">Farm하니?</span>
+</div></div>
+<div class="flex items-center gap-4">
+<button class="text-label-md font-label-md text-on-surface-variant hover:text-primary transition-colors">도움말</button>
+</div>
+</header>
+<main class="pt-16 min-h-screen flex items-center justify-center relative overflow-hidden">
+<!-- Background Atmospheric Element -->
+<div class="absolute inset-0 z-0 opacity-20 pointer-events-none">
+<div class="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-sage-accent blur-[100px]"></div>
+<div class="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] rounded-full bg-primary blur-[120px]"></div>
+</div>
+<div class="w-full max-w-[1200px] px-gutter-md grid grid-cols-1 md:grid-cols-12 gap-8 items-center z-10">
+<!-- Left Side: Visual/Branding -->
+<div class="hidden md:flex md:col-span-6 flex-col gap-6">
+<div class="rounded-xl overflow-hidden shadow-xl aspect-square relative group">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A lush, high-resolution close-up photo of vibrant green Monstera leaves and a small ceramic pot on a clean wooden table. The lighting is soft morning sunlight filtering through a window, creating a serene and nurturing botanical atmosphere. The color palette features rich deep greens, earthy browns, and warm cream tones, reflecting a premium and modern plant-care service aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJ2KdenKKOsWuo_FLifitolJK1JxyKffIpNVFBAUF2TqljpWouSIwz1cqYYQktRgtWR5T5jY_iex2s7JBXHsIZ_4e-YNgNV6kXgFofNNrmDP5UguyIskuMks_Gq685YXpz5R9x9LQbzo6bZDLoV-txkCJzveLaYRb87aBGFSBPBiZB7kA0IbZOpHEOb1BZXSdlqBvaXWgKwpSDYjVaZCah9Aot6-BRxaVONGA8R5KlABc5EM8MqecN">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-8">
+<p class="text-white font-headline-lg text-headline-lg leading-tight mb-2">당신의 식물을 위한<br>가장 스마트한 파트너</p>
+<p class="text-white/80 text-body-md font-body-md">AI 기반 진단부터 물주기 알림까지,<br>Farm하니? 와 함께 반려식물을 더 건강하게 키워보세요.</p>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="flex-1 p-4 bg-surface-container rounded-xl flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined" data-icon="clinical_notes">clinical_notes</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-primary">정밀 진단</p>
+<p class="text-[12px] text-on-surface-variant">사진 한 장으로 상태 파악</p>
+</div>
+</div>
+<div class="flex-1 p-4 bg-surface-container rounded-xl flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-sage-accent flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="schedule">schedule</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-primary">맞춤 관리</p>
+<p class="text-[12px] text-on-surface-variant">종류별 최적 케어 가이드</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Side: Auth Form -->
+<div class="md:col-span-6 flex justify-center lg:justify-end">
+<div class="auth-card w-full max-w-[480px] p-8 md:p-10 rounded-xl border border-outline-variant/20 shadow-lg">
+<div class="mb-8">
+<h2 class="text-headline-lg font-headline-lg text-on-surface mb-2">시작하기</h2>
+<p class="text-body-md font-body-md text-on-surface-variant">회원이 되어 스마트한 식물 생활을 시작하세요.</p>
+</div>
+<!-- Social Login Section -->
+
+
+<!-- Traditional Form -->
+<form class="flex flex-col gap-5" onsubmit="return false;">
+<div class="flex flex-col gap-1.5">
+<label class="text-label-md font-label-md text-on-surface px-1" for="email">이메일</label>
+<input class="w-full h-12 px-4 rounded-lg bg-surface-container-low border-transparent focus:border-primary focus:ring-0 transition-soft text-body-md" id="email" placeholder="example@farm.com" type="email">
+</div>
+<div class="flex flex-col gap-1.5">
+<div class="flex justify-between items-center px-1">
+<label class="text-label-md font-label-md text-on-surface" for="password">비밀번호</label>
+<button class="text-label-sm font-label-sm text-primary hover:underline" type="button">비밀번호 찾기</button>
+</div>
+<input class="w-full h-12 px-4 rounded-lg bg-surface-container-low border-transparent focus:border-primary focus:ring-0 transition-soft text-body-md" id="password" placeholder="••••••••" type="password">
+</div>
+<button class="w-full h-14 bg-primary-container text-white rounded-lg font-label-md text-body-lg flex items-center justify-center gap-2 mt-2 hover:bg-primary transition-soft active:scale-[0.98] shadow-md shadow-primary-container/20" id="auth-submit">
+                            로그인
+                            <span class="material-symbols-outlined text-[18px]" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</form>
+<p class="mt-8 text-center text-body-md font-body-md text-on-surface-variant">
+                        계정이 없으신가요?
+                        <button class="text-primary font-bold hover:underline ml-1" id="toggle-auth">회원가입</button>
+</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer (Shell Structure) -->
+<footer class="w-full py-8 mt-auto bg-surface-container-high border-t border-outline-variant/10">
+<div class="max-w-max-width mx-auto px-gutter-md flex flex-col md:flex-row justify-between items-center gap-6">
+<div class="flex flex-col items-center md:items-start gap-2">
+<span class="text-label-md font-label-md font-bold text-on-surface-variant">Farm하니? AI</span>
+<p class="text-label-sm font-label-sm text-on-surface-variant/70 text-center md:text-left">© 2024 Farm하니? AI. 지능형 관리를 통한 성장의 즐거움.</p>
+</div>
+<div class="flex gap-6">
+<a class="text-label-sm font-label-sm text-on-surface-variant hover:text-primary transition-all" href="#">개인정보 처리방침</a>
+<a class="text-label-sm font-label-sm text-on-surface-variant hover:text-primary transition-all" href="#">이용약관</a>
+<a class="text-label-sm font-label-sm text-on-surface-variant hover:text-primary transition-all" href="#">고객지원</a>
+</div>
+</div>
+</footer>
+<script>
+        // Simple UI Interaction logic for toggling Login/Signup
+        const toggleBtn = document.getElementById('toggle-auth');
+        const submitBtn = document.getElementById('auth-submit');
+        const title = document.querySelector('h2');
+        const subtitle = title.nextElementSibling;
+        let isLogin = true;
+
+        toggleBtn.addEventListener('click', () => {
+            isLogin = !isLogin;
+            if (isLogin) {
+                title.textContent = '시작하기';
+                subtitle.textContent = '회원이 되어 스마트한 식물 생활을 시작하세요.';
+                submitBtn.innerHTML = '로그인 <span class="material-symbols-outlined text-[18px]" data-icon="arrow_forward">arrow_forward</span>';
+                toggleBtn.textContent = '회원가입';
+                document.querySelector('.text-label-sm.text-on-surface-variant.bg-white').textContent = '또는 이메일로 로그인';
+            } else {
+                title.textContent = '회원가입';
+                subtitle.textContent = '식물 관리의 시작, Farm하니? 와 함께하세요.';
+                submitBtn.innerHTML = '가입하기 <span class="material-symbols-outlined text-[18px]" data-icon="person_add">person_add</span>';
+                toggleBtn.textContent = '로그인하기';
+                document.querySelector('.text-label-sm.text-on-surface-variant.bg-white').textContent = '또는 이메일로 가입';
+            }
+        });
+
+        // Ripple/Active effect simulation
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', () => btn.classList.add('scale-95'));
+            btn.addEventListener('mouseup', () => btn.classList.remove('scale-95'));
+            btn.addEventListener('mouseleave', () => btn.classList.remove('scale-95'));
+        });
+    </script>
+
+
+
+
+
+
+</body></html>

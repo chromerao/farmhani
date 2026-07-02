@@ -1,0 +1,146 @@
+{
+  "dataset_key": "71705",
+  "dataset_name": "065.원예식물_화분류_물주기_수분공급 주기_생육데이터",
+  "source_url": "https://www.aihub.or.kr/aihubdata/data/view.do?dataSetSn=71705",
+  "download_api": "https://api.aihub.or.kr/down/0.6/71705.do",
+  "priority_policy": {
+    "mvp": "Download label zips first. Source image zips are large and should be added only when image model training or visual QA is required.",
+    "rag_use": "Use JSON label data to summarize plant class, water condition, sensor ranges, growth status, and image manifest metadata."
+  },
+  "files": [
+    {
+      "file_key": "521747",
+      "split": "Training",
+      "kind": "label",
+      "priority": 1,
+      "plant_name": "몬스테라",
+      "plant_group": "화초",
+      "water_ecology": "습생식물",
+      "filename": "TL_A.화초_3.습생식물_09.몬스테라.zip",
+      "size": "35.58 MB"
+    },
+    {
+      "file_key": "521745",
+      "split": "Training",
+      "kind": "label",
+      "priority": 1,
+      "plant_name": "스파티필럼",
+      "plant_group": "화초",
+      "water_ecology": "중생식물",
+      "filename": "TL_A.화초_2.중생식물_07.스파티필럼.zip",
+      "size": "34.28 MB"
+    },
+    {
+      "file_key": "521744",
+      "split": "Training",
+      "kind": "label",
+      "priority": 1,
+      "plant_name": "호접란",
+      "plant_group": "화초",
+      "water_ecology": "중생식물",
+      "filename": "TL_A.화초_2.중생식물_06.호접란.zip",
+      "size": "36.22 MB"
+    },
+    {
+      "file_key": "521741",
+      "split": "Training",
+      "kind": "label",
+      "priority": 1,
+      "plant_name": "금전수",
+      "plant_group": "화초",
+      "water_ecology": "건생식물",
+      "filename": "TL_A.화초_1.건생식물_03.금전수.zip",
+      "size": "47.67 MB"
+    },
+    {
+      "file_key": "521739",
+      "split": "Training",
+      "kind": "label",
+      "priority": 1,
+      "plant_name": "스투키",
+      "plant_group": "화초",
+      "water_ecology": "건생식물",
+      "filename": "TL_A.화초_1.건생식물_01.스투키.zip",
+      "size": "27.71 MB"
+    },
+    {
+      "file_key": "521740",
+      "split": "Training",
+      "kind": "label",
+      "priority": 1,
+      "plant_name": "선인장",
+      "plant_group": "화초",
+      "water_ecology": "건생식물",
+      "filename": "TL_A.화초_1.건생식물_02.선인장.zip",
+      "size": "33.18 MB"
+    },
+    {
+      "file_key": "521742",
+      "split": "Training",
+      "kind": "label",
+      "priority": 2,
+      "plant_name": "테이블야자",
+      "plant_group": "화초",
+      "water_ecology": "중생식물",
+      "filename": "TL_A.화초_2.중생식물_04.테이블야자.zip",
+      "size": "34.65 MB"
+    },
+    {
+      "file_key": "521746",
+      "split": "Training",
+      "kind": "label",
+      "priority": 2,
+      "plant_name": "보스턴고사리",
+      "plant_group": "화초",
+      "water_ecology": "습생식물",
+      "filename": "TL_A.화초_3.습생식물_08.보스턴고사리.zip",
+      "size": "38.92 MB"
+    },
+    {
+      "file_key": "521751",
+      "split": "Training",
+      "kind": "label",
+      "priority": 2,
+      "plant_name": "관음죽",
+      "plant_group": "관상수",
+      "water_ecology": "중생식물",
+      "filename": "TL_B.관상수_2.중생식물_13.관음죽.zip",
+      "size": "46.38 MB"
+    },
+    {
+      "file_key": "521752",
+      "split": "Training",
+      "kind": "label",
+      "priority": 2,
+      "plant_name": "벵갈고무나무",
+      "plant_group": "관상수",
+      "water_ecology": "습생식물",
+      "filename": "TL_B.관상수_3.습생식물_14.벵갈고무나무.zip",
+      "size": "40.55 MB"
+    },
+    {
+      "file_key": "521755",
+      "split": "Validation",
+      "kind": "source_image",
+      "priority": 3,
+      "plant_name": "선인장",
+      "plant_group": "화초",
+      "water_ecology": "건생식물",
+      "filename": "VS_A.화초_1.건생식물_02.선인장.zip",
+      "size": "1.59 GB",
+      "note": "Smallest image source zip; use only when image samples are needed."
+    },
+    {
+      "file_key": "521761",
+      "split": "Validation",
+      "kind": "source_image",
+      "priority": 3,
+      "plant_name": "올리브나무",
+      "plant_group": "관상수",
+      "water_ecology": "건생식물",
+      "filename": "VS_B.관상수_1.건생식물_11.올리브나무.zip",
+      "size": "2.21 GB",
+      "note": "Second-smallest image source zip; optional for image manifest validation."
+    }
+  ]
+}
