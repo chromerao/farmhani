@@ -183,6 +183,38 @@
       "usage_scope": "context_later",
       "safety_tags": ["not_diagnosis"],
       "notes": "2차 확장: 지역/기상 기반 위험도 보정."
+    },
+    {
+      "source_id": "gyeonggido_agri",
+      "title": "경기도농업기술원 보고서",
+      "publisher": "경기도농업기술원",
+      "url": "https://nongup.gg.go.kr/data/107267",
+      "license": "공공누리 제1유형 (출처 표시)",
+      "category": "crop_care",
+      "priority": 3,
+      "collection_mode": "web",
+      "api_key_env": null,
+      "usage_scope": "rag",
+      "safety_tags": [
+        "not_diagnosis"
+      ],
+      "notes": "경기도농업기술원 보고서 자료실에서 수집된 60종 식물 관련 PDF 메타데이터"
+    },
+    {
+      "source_id": "national_botanic_garden",
+      "title": "국립수목원 식물도감 및 표준식물목록",
+      "publisher": "산림청 국립수목원",
+      "url": "https://www.data.go.kr/data/15142872/openapi.do",
+      "license": "공공누리 제1유형 (출처 표시)",
+      "category": "indoor_care",
+      "priority": 2,
+      "collection_mode": "api",
+      "api_key_env": "PUBLIC_DATA_PORTAL_API_KEY",
+      "usage_scope": "rag",
+      "safety_tags": [
+        "not_diagnosis"
+      ],
+      "notes": "국립수목원 OpenAPI를 통해 수집된 60종 식물의 형태, 생태, 꽃/잎 특징 정보"
     }
   ]
 }
