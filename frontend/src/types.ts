@@ -70,6 +70,11 @@ export type PlantCareChatResponse = {
   messageId?: string;
 };
 
+export type ChatModelInfo = {
+  chatModel: string;
+  visionModel: string;
+};
+
 export type ChatSession = {
   id: string;
   userId: string;

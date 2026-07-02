@@ -3,6 +3,7 @@ import type {
   CareLog,
   ChatMessage,
   ChatMemoryMessage,
+  ChatModelInfo,
   ChatResponseMode,
   ChatSession,
   Plant,
@@ -370,6 +371,10 @@ export async function askPlantCare(
       question
     })
   });
+}
+
+export async function getChatModelInfo(): Promise<ChatModelInfo> {
+  return request<ChatModelInfo>("/api/v1/chat/model-info", { auth: false });
 }
 
 export async function listChatSessions(plantId?: string, responseMode?: ChatResponseMode) {

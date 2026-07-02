@@ -34,6 +34,10 @@ class PlantCareChatResponse(BaseModel):
     sessionId: Optional[UUID] = Field(None, description="저장된 상담 세션 UUID")
     messageId: Optional[UUID] = Field(None, description="저장된 assistant 메시지 UUID")
 
+class ChatModelInfo(BaseModel):
+    chatModel: str = Field(..., description="현재 식물 상담 답변 생성에 사용하는 LLM 모델명")
+    visionModel: str = Field(..., description="현재 사진 분석에 사용하는 Vision 모델명")
+
 class ChatSession(BaseModel):
     id: UUID
     userId: UUID

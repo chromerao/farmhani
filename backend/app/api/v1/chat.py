@@ -1,11 +1,13 @@
+import os
 import uuid
 from datetime import datetime
 from typing import List
 from fastapi import APIRouter, status, Depends, HTTPException, Path, Query
 from supabase import Client
 from app.auth.security import get_current_user
+from app.core.config import settings
 from app.db.session import get_supabase_client
-from app.schemas.chat import PlantCareChatRequest, PlantCareChatResponse, Citation, ChatSession, ChatMessage
+from app.schemas.chat import PlantCareChatRequest, PlantCareChatResponse, Citation, ChatSession, ChatMessage, ChatModelInfo
 from app.services.rag.pipeline import chat_mode_prefix, run_rag_workflow
 
 router = APIRouter(prefix="/chat", tags=["Plant Care RAG Chat"])
@@ -25,6 +27,13 @@ def fallback_session_title(db: Client, plant_id: str | None, created_at: str) ->
         return f"상담 {datetime.fromisoformat(created_at).strftime('%m/%d %H:%M')}"
     except Exception:
         return "식물 상담"
+
+@router.get("/model-info", response_model=ChatModelInfo, summary="식물 상담 AI 모델 정보 조회")
+async def get_chat_model_info():
+    return ChatModelInfo(
+        chatModel=os.getenv("CHAT_MODEL") or settings.CHAT_MODEL,
+        visionModel=os.getenv("VISION_MODEL") or settings.VISION_MODEL
+    )
 
 @router.post("/plant-care", response_model=PlantCareChatResponse, status_code=status.HTTP_200_OK, summary="식물 케어 RAG 상담 실행")
 async def consult_plant_care(

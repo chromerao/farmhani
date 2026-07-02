@@ -544,6 +544,9 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
                             "필드: evidenceNotes(string), summary(string), possibleCauses(string[]), todayActions(string[]), observationChecklist(string[]). "
                             "evidenceNotes 필드에는 사용자에게 보여줄 수 있는 짧은 근거 요약만 작성하세요. 내부 추론 과정이나 생각의 흐름은 출력하지 마세요. "
                             f"{mode_instruction}"
+                            "이전 대화 메모리는 사용자의 선호, 이름, 직전 맥락을 이해하는 보조 정보로만 사용하세요. "
+                            "현재 질문과 무관한 이전 증상, 이전 문서, 이전 답변 근거를 새 답변에 끌어오지 마세요. "
+                            "현재 검색된 공식 문서가 없으면 문서 근거가 없다고 명확히 말하세요. "
                             "질병명 확정, 농약 직접 처방, 과도한 단정은 피하고 '~가능성', '관찰 필요' 중심으로 말하세요. "
                             "사진 분석 결과가 있으면 이를 관찰 근거로 반영하되, 사진만으로 확정 진단하지 마세요. "
                             "검색 문서가 부족하면 부족하다고 말하고 추가 사진/물주기/빛/흙 상태 정보를 요청하세요. "
@@ -581,7 +584,7 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
             print(f"[RAG LLM WARNING] OpenAI 답변 생성 중 실패, 룰베이스 전환: {e}")
             
     combined_docs_text = " ".join([d.get("content", "") for d in docs])
-    combined_signal_text = f"{question} {context} {history_text} {image_description} {' '.join(state.get('image_signals') or [])} {combined_docs_text}".lower()
+    combined_signal_text = f"{question} {context} {image_description} {' '.join(state.get('image_signals') or [])} {combined_docs_text}".lower()
 
     if not docs:
         if is_companion_mode:

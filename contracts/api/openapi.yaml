@@ -214,6 +214,17 @@ paths:
                   $ref: "#/components/schemas/ChatMessage"
         "404":
           description: Chat session not found or access denied
+  /api/v1/chat/model-info:
+    get:
+      summary: Get current AI model names for plant consultation
+      security: []
+      responses:
+        "200":
+          description: Active chat and vision model names
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatModelInfo"
   /api/v1/chat/plant-care:
     post:
       summary: Run plant care RAG consultation
@@ -442,6 +453,16 @@ components:
         messageId:
           type: string
           format: uuid
+    ChatModelInfo:
+      type: object
+      required: [chatModel, visionModel]
+      properties:
+        chatModel:
+          type: string
+          example: gpt-4o-mini
+        visionModel:
+          type: string
+          example: gpt-4o-mini
     Citation:
       type: object
       required: [sourceId, title]

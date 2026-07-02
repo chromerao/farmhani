@@ -4,6 +4,7 @@ import {
   createCareLog,
   createPlant,
   getAccessToken,
+  getChatModelInfo,
   getPlant,
   getPlants,
   hasAuthSession,
@@ -158,6 +159,15 @@ function createHiddenFileInput(doc: Document) {
   input.style.display = "none";
   doc.body.appendChild(input);
   return input;
+}
+
+function removeCategoryAddButtons(doc: Document) {
+  doc.querySelectorAll("button").forEach((button) => {
+    const text = normalizedText(button);
+    if (text.includes("카테고리 추가") || text.includes("새 카테고리")) {
+      button.remove();
+    }
+  });
 }
 
 function findPlantGrid(doc: Document) {
@@ -1308,6 +1318,22 @@ function App() {
     syncButtons();
   }
 
+  function bindChatModelInfo(doc: Document) {
+    const title = Array.from(doc.querySelectorAll("h3")).find((element) => normalizedText(element).includes("상담"));
+    const subtitle = title?.nextElementSibling as HTMLElement | null;
+    if (!subtitle || subtitle.dataset.modelInfoBound === "true") return;
+
+    subtitle.dataset.modelInfoBound = "true";
+    subtitle.textContent = "LLM 모델 정보를 확인하는 중입니다.";
+    void getChatModelInfo()
+      .then((info) => {
+        subtitle.textContent = `LLM: ${info.chatModel}${info.visionModel ? ` · Vision: ${info.visionModel}` : ""}`;
+      })
+      .catch(() => {
+        subtitle.textContent = "LLM: gpt-4o-mini";
+      });
+  }
+
   function initializeChatCanvas(doc: Document) {
     const messages = doc.getElementById("chat-messages");
     const isCompanionMode = chatResponseModeRef.current === "companion";
@@ -1716,42 +1742,64 @@ function App() {
             image: ""
           }));
           const photoEntries = (plant.photos ?? []).map((photo) => ({
-            type: "사진",
+            type: "AI진단",
             date: photo.capturedAt || photo.createdAt,
             title: photo.note || "사진 기록",
-            body: `${plant.name}의 상태 사진을 저장했습니다.`,
+            body: `${plant.name}의 상태 사진을 저장했습니다. 상담에서 사진 진단 근거로 활용할 수 있습니다.`,
             image: storagePathToPublicUrl(photo.storagePath) || ""
           }));
           const entries = [...careEntries, ...photoEntries]
             .sort((a, b) => String(b.date).localeCompare(String(a.date)))
             .slice(0, 8);
 
-          timeline.innerHTML = entries.length
-            ? entries
-                .map(
-                  (entry, index) => `<div class="relative flex flex-col md:flex-row items-start md:items-center">
-                    <div class="${index % 2 === 0 ? "md:w-1/2 md:pr-12 md:text-right" : "md:w-1/2 md:ml-auto md:pl-12"} order-2 mt-4 md:mt-0">
-                      <div class="bg-white p-6 rounded-2xl shadow-sm border border-outline-variant/20 hover:shadow-md transition-all">
-                        <span class="text-label-sm text-primary font-bold block mb-2">${escapeHtml(formatDate(entry.date))} · ${escapeHtml(entry.type)}</span>
-                        <h4 class="text-headline-md font-bold mb-2">${escapeHtml(entry.title)}</h4>
-                        <p class="text-body-md text-on-surface-variant mb-4">${escapeHtml(entry.body)}</p>
-                        ${
-                          entry.image
-                            ? `<div class="rounded-xl overflow-hidden h-44"><img alt="${escapeHtml(entry.title)}" class="w-full h-full object-cover" src="${escapeHtml(entry.image)}"></div>`
-                            : ""
-                        }
+          const entryMatchesFilter = (entry: (typeof entries)[number], filter: string) => {
+            if (filter === "전체") return true;
+            if (filter === "물주기") return entry.type.includes("물주기");
+            if (filter === "영양") return /영양|비료|퇴비|분갈이|양분/.test(entry.body);
+            if (filter.includes("AI")) return entry.type.includes("AI") || /진단|상담|사진/.test(entry.body);
+            return true;
+          };
+
+          const renderTimeline = (filter = "전체") => {
+            const filtered = entries.filter((entry) => entryMatchesFilter(entry, filter));
+            timeline.innerHTML = filtered.length
+              ? filtered
+                  .map(
+                    (entry, index) => `<div class="relative flex flex-col md:flex-row items-start md:items-center">
+                      <div class="${index % 2 === 0 ? "md:w-1/2 md:pr-12 md:text-right" : "md:w-1/2 md:ml-auto md:pl-12"} order-2 mt-4 md:mt-0">
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-outline-variant/20 hover:shadow-md transition-all">
+                          <span class="text-label-sm text-primary font-bold block mb-2">${escapeHtml(formatDate(entry.date))} · ${escapeHtml(entry.type)}</span>
+                          <h4 class="text-headline-md font-bold mb-2">${escapeHtml(entry.title)}</h4>
+                          <p class="text-body-md text-on-surface-variant mb-4">${escapeHtml(entry.body)}</p>
+                          ${
+                            entry.image
+                              ? `<div class="rounded-xl overflow-hidden h-44"><img alt="${escapeHtml(entry.title)}" class="w-full h-full object-cover" src="${escapeHtml(entry.image)}"></div>`
+                              : ""
+                          }
+                        </div>
                       </div>
-                    </div>
-                    <div class="absolute left-[-24px] md:left-1/2 md:transform md:-translate-x-1/2 z-10 w-8 h-8 rounded-full bg-primary border-4 border-white flex items-center justify-center text-white shadow-sm order-1">
-                      <span class="material-symbols-outlined text-[16px]">${entry.image ? "image" : "water_drop"}</span>
-                    </div>
-                  </div>`
-                )
-                .join("")
-            : `<div class="bg-white p-8 rounded-2xl shadow-sm border border-outline-variant/20 text-center">
-                <p class="text-headline-sm font-bold text-on-surface mb-2">아직 성장 일지가 없습니다.</p>
-                <p class="text-body-md text-on-surface-variant">사진을 추가하거나 물주기 기록을 남기면 이곳에 ${escapeHtml(plant.name)}의 기록이 쌓입니다.</p>
-              </div>`;
+                      <div class="absolute left-[-24px] md:left-1/2 md:transform md:-translate-x-1/2 z-10 w-8 h-8 rounded-full bg-primary border-4 border-white flex items-center justify-center text-white shadow-sm order-1">
+                        <span class="material-symbols-outlined text-[16px]">${entry.image ? "image" : "water_drop"}</span>
+                      </div>
+                    </div>`
+                  )
+                  .join("")
+              : `<div class="bg-white p-8 rounded-2xl shadow-sm border border-outline-variant/20 text-center">
+                  <p class="text-headline-sm font-bold text-on-surface mb-2">${escapeHtml(filter)} 기록이 없습니다.</p>
+                  <p class="text-body-md text-on-surface-variant">사진을 추가하거나 물주기 기록을 남기면 이곳에 ${escapeHtml(plant.name)}의 기록이 쌓입니다.</p>
+                </div>`;
+          };
+
+          renderTimeline("전체");
+          Array.from(doc.querySelectorAll("button"))
+            .filter((button) => ["전체", "물주기", "영양", "AI진단", "AI 진단"].includes(normalizedText(button)))
+            .forEach((button) => {
+              (button as HTMLButtonElement).onclick = (event) => {
+                event.preventDefault();
+                const filter = normalizedText(button);
+                renderTimeline(filter);
+              };
+            });
         }
       })
       .catch((error) => {
@@ -1776,6 +1824,7 @@ function App() {
               memo: "상세 화면 빠른 기록"
             });
             frameAlert(doc, "물주기 기록을 저장했습니다.");
+            bindDetailData(doc);
           } catch (error) {
             if (!handleApiError(doc, error)) frameAlert(doc, "물주기 저장에 실패했습니다.");
           }
@@ -1967,6 +2016,7 @@ function App() {
       pendingChatPhotoNoteRef.current = "";
     }
 
+    removeCategoryAddButtons(doc);
     bindGenericControls(doc);
     bindFrameNavigation(doc);
     bindLogoHome(doc);
@@ -1991,6 +2041,7 @@ function App() {
       bindQuickCareButtons(doc);
     }
     if (page === "chat") {
+      bindChatModelInfo(doc);
       bindChatModeSelector(doc);
       initializeChatCanvas(doc);
       bindChatPhotoPicker(doc);
