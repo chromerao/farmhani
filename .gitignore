@@ -11,6 +11,7 @@ __pycache__/
 *.py[cod]
 *.tsbuildinfo
 .pytest_cache/
+pytest-cache-files-*/
 .mypy_cache/
 .ruff_cache/
 .venv/
@@ -67,3 +68,8 @@ Thumbs.db
 .idea/
 .vscode/
 !.vscode/extensions.json
+
+
+# 성준이의 개인 파일
+.agents/
+Glossary/

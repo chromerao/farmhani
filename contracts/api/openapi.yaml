@@ -1,8 +1,13 @@
 openapi: 3.0.3
 info:
   title: Plant Doctor RAG API
-  version: 0.1.0
-  description: 식물 주치의 AI MVP용 프론트-백엔드 공유 API 계약 초안입니다.
+  version: 0.2.0
+  description: |
+    식물 주치의 AI MVP용 프론트-백엔드 공유 API 계약 문서입니다.
+    
+    [업데이트 히스토리]
+    * v0.2.0: Supabase pgvector 클라우드 DB 연동 및 RAG 상담 이력 메시지 스키마 정합 반영 완료.
+    * v0.1.0: RAG 상담 및 이력 조회 API 엔드포인트 초안 수립.
 servers:
   - url: http://localhost:8000
     description: Local backend
@@ -43,6 +48,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Plant"
+  /api/v1/plants/{plantId}:
+    get:
+      summary: Get plant detailed profile with care logs and photos
+      parameters:
+        - $ref: "#/components/parameters/PlantId"
+      responses:
+        "200":
+          description: Plant detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlantDetail"
+        "404":
+          description: Plant not found or access denied
+    patch:
+      summary: Update a plant profile
+      parameters:
+        - $ref: "#/components/parameters/PlantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlantUpdate"
+      responses:
+        "200":
+          description: Updated plant profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plant"
+        "404":
+          description: Plant not found or access denied
+    delete:
+      summary: Delete a plant profile
+      parameters:
+        - $ref: "#/components/parameters/PlantId"
+      responses:
+        "204":
+          description: Plant profile deleted successfully
+        "404":
+          description: Plant not found or access denied
   /api/v1/plants/{plantId}/care-logs:
     post:
       summary: Create a care log for a plant
@@ -79,6 +126,105 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PlantPhoto"
+  /api/v1/plants/{plantId}/care-logs/{logId}:
+    put:
+      summary: Update a care log entry
+      parameters:
+        - $ref: "#/components/parameters/PlantId"
+        - name: logId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CareLogUpdate"
+      responses:
+        "200":
+          description: Updated care log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CareLog"
+        "404":
+          description: Plant/log not found or access denied
+    delete:
+      summary: Delete a care log entry
+      parameters:
+        - $ref: "#/components/parameters/PlantId"
+        - name: logId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Care log entry deleted successfully
+        "404":
+          description: Plant/log not found or access denied
+  /api/v1/chat/sessions:
+    get:
+      summary: List current user's RAG chat sessions
+      parameters:
+        - name: plantId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [expert, companion]
+          description: expert는 전문가 상담방, companion은 내 식물과 대화하기 상담방만 조회
+      responses:
+        "200":
+          description: List of chat sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatSession"
+  /api/v1/chat/sessions/{sessionId}/messages:
+    get:
+      summary: List messages within a chat session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Messages history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatMessage"
+        "404":
+          description: Chat session not found or access denied
+  /api/v1/chat/model-info:
+    get:
+      summary: Get current AI model names for plant consultation
+      security: []
+      responses:
+        "200":
+          description: Active chat and vision model names
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatModelInfo"
   /api/v1/chat/plant-care:
     post:
       summary: Run plant care RAG consultation
@@ -95,6 +241,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PlantCareChatResponse"
+  /api/v1/plant-catalog:
+    get:
+      summary: List or search plant species catalog
+      security: []
+      parameters:
+        - name: q
+          in: query
+          description: Search query for plant name or species
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum autocomplete result count
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: Plant species catalog list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlantCatalogItem"
+  /api/v1/uploads/signed-url:
+    post:
+      summary: Get signed upload URL for plant photo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadSignedUrlRequest"
+      responses:
+        "200":
+          description: Signed upload URL and storage path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadSignedUrlResponse"
+  /api/v1/uploads/plant-photo:
+    post:
+      summary: Upload plant photo through backend and register metadata
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/PlantPhotoUploadRequest"
+      responses:
+        "201":
+          description: Uploaded and registered photo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlantPhoto"
 components:
   securitySchemes:
     bearerAuth:
@@ -124,6 +331,9 @@ components:
         sunlight:
           type: string
           example: 오전 직사광선
+        imageUrl:
+          type: string
+          example: https://xyz.supabase.co/storage/v1/object/public/plant-photos/abc.jpg
     Plant:
       allOf:
         - $ref: "#/components/schemas/PlantCreate"
@@ -202,6 +412,18 @@ components:
         photoId:
           type: string
           format: uuid
+        sessionId:
+          type: string
+          format: uuid
+          description: 이어갈 특정 상담 세션 UUID
+        newSession:
+          type: boolean
+          default: false
+        responseMode:
+          type: string
+          enum: [expert, companion]
+          default: expert
+          description: expert는 전문가 상담 말투, companion은 등록한 식물과 대화하는 친근한 말투
         question:
           type: string
           example: 잎 끝이 마르고 아래쪽 잎이 노랗게 변했어요.
@@ -229,6 +451,22 @@ components:
             $ref: "#/components/schemas/Citation"
         safetyNotice:
           type: string
+        sessionId:
+          type: string
+          format: uuid
+        messageId:
+          type: string
+          format: uuid
+    ChatModelInfo:
+      type: object
+      required: [chatModel, visionModel]
+      properties:
+        chatModel:
+          type: string
+          example: gpt-4o-mini
+        visionModel:
+          type: string
+          example: gpt-4o-mini
     Citation:
       type: object
       required: [sourceId, title]
@@ -241,3 +479,134 @@ components:
           type: string
         publisher:
           type: string
+    UploadSignedUrlRequest:
+      type: object
+      required: [fileName]
+      properties:
+        fileName:
+          type: string
+          example: monstera.jpg
+        mimeType:
+          type: string
+          example: image/jpeg
+    UploadSignedUrlResponse:
+      type: object
+      required: [signedUrl, storagePath]
+      properties:
+        signedUrl:
+          type: string
+          example: https://xyz.supabase.co/storage/v1/object/upload/sign/plant-photos/...
+        storagePath:
+          type: string
+          example: users/d3b07384-d113-49c3-a558-1ec114a84d41/plants/abcd-efgh-1234_monstera.jpg
+    PlantPhotoUploadRequest:
+      type: object
+      required: [plantId, file]
+      properties:
+        plantId:
+          type: string
+          format: uuid
+        note:
+          type: string
+        capturedAt:
+          type: string
+          format: date-time
+        file:
+          type: string
+          format: binary
+    PlantCatalogItem:
+      type: object
+      required: [id, name, species]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: 몬스테라 델리시오사
+        species:
+          type: string
+          example: Monstera deliciosa
+        familyName:
+          type: string
+          example: 천남성과
+        description:
+          type: string
+          example: 큰 잎과 독특한 구멍이 특징인 인테리어 식물
+    PlantDetail:
+      allOf:
+        - $ref: "#/components/schemas/Plant"
+        - type: object
+          properties:
+            careLogs:
+              type: array
+              items:
+                $ref: "#/components/schemas/CareLog"
+            photos:
+              type: array
+              items:
+                $ref: "#/components/schemas/PlantPhoto"
+    PlantUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        species:
+          type: string
+        location:
+          type: string
+        sunlight:
+          type: string
+        imageUrl:
+          type: string
+    CareLogUpdate:
+      type: object
+      properties:
+        wateredAt:
+          type: string
+          format: date
+        leafCondition:
+          type: string
+        soilCondition:
+          type: string
+        memo:
+          type: string
+    ChatSession:
+      type: object
+      required: [id, userId, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        plantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+    ChatMessage:
+      type: object
+      required: [id, sessionId, sender, content, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        sender:
+          type: string
+          enum: [user, assistant]
+          description: 메시지 전송자 주체 (DB 물리 컬럼명 'role' 과 매핑)
+        content:
+          type: string
+          description: '대화 메시지 본문 텍스트 (DB 물리적으로는 {"text": "내용"} 형태의 JSONB 객체로 보관되나, API 인터페이스 레벨에서는 일반 문자열로 언래핑되어 서빙됩니다.)'
+        citations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Citation"
+        createdAt:
+          type: string
+          format: date-time

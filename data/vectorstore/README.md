@@ -1,5 +1,14 @@
 # Vectorstore
 
-로컬 vector DB 또는 embedding cache 위치입니다. 실제 파일은 Git에 커밋하지 않습니다.
+embedding 포함 파일 또는 local vector DB 캐시를 임시 저장하는 폴더입니다.
 
-운영 환경은 Supabase Postgres + pgvector 사용을 권장합니다.
+## 규칙
+
+- embedding 포함 파일은 Git에 커밋하지 않습니다.
+- 운영 저장소는 Supabase Postgres + pgvector를 기준으로 합니다.
+
+## 예시
+
+```text
+data/vectorstore/rag_chunks.embedded.jsonl
+```

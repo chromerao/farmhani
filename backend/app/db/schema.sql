@@ -62,6 +62,7 @@ IF NOT EXISTS vector;
             DELETE
             SET
                 NULL,
+                title TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL );
     -- 7. chat_messages (상담 대화 이력 테이블)
     CREATE TABLE IF NOT EXISTS public.chat_messages
@@ -70,30 +71,42 @@ IF NOT EXISTS vector;
             session_id UUID NOT NULL REFERENCES public.chat_sessions(id) ON
             DELETE
                 CASCADE,
-                sender TEXT NOT NULL CHECK (sender IN ('user',
-                                                       'assistant')),
-                content TEXT NOT NULL                               ,
+                role TEXT NOT NULL CHECK (role IN ('user',
+                                                   'assistant')),
+                content JSONB NOT NULL                              ,
                 citations JSONB DEFAULT '[]'::jsonb                 , -- 출처 메타데이터 리스트
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL );
+    -- 7.5. plant_catalog (식물 품종 도감 테이블)
+    CREATE TABLE IF NOT EXISTS public.plant_catalog
+    (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        species     TEXT NOT NULL,
+        family_name TEXT,
+        description TEXT,
+        created_at  TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    );
     -- 8. rag_sources (RAG용 공식 문서 출처 테이블)
     CREATE TABLE IF NOT EXISTS public.rag_sources
         (
-            id         TEXT PRIMARY KEY, -- 예: 'RAG-DOC-001'
-            title      TEXT NOT NULL   ,
-            url        TEXT            ,
-            publisher  TEXT            ,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+            source_id    UUID PRIMARY KEY,
+            title        TEXT NOT NULL   ,
+            url          TEXT            ,
+            publisher    TEXT            ,
+            collected_at TIMESTAMP WITH TIME ZONE,
+            created_at   TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
         )
     ;
     -- 9. rag_chunks (검색 가능한 문서 chunk와 embedding 테이블)
     CREATE TABLE IF NOT EXISTS public.rag_chunks
         (
-            id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            source_id TEXT NOT NULL REFERENCES public.rag_sources(id) ON
+            chunk_id UUID PRIMARY KEY,
+            source_id UUID NOT NULL REFERENCES public.rag_sources(source_id) ON
             DELETE
                 CASCADE                           ,
-                content TEXT NOT NULL             ,
+                text TEXT NOT NULL                ,
                 embedding VECTOR(1536)            , -- OpenAI Embedding 차원(1536) 기준
+                symptom_keywords TEXT[] DEFAULT ARRAY[]::TEXT[],
                 metadata JSONB DEFAULT '{}'::jsonb,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL );
     -- 10. 벡터 인덱스 생성 (HNSW 인덱스를 사용하여 유사도 검색 속도 향상)
@@ -104,6 +117,43 @@ IF NOT EXISTS vector;
             embedding vector_cosine_ops
         )
     ;
+
+    -- 11. RAG 유사도 검색 RPC 함수
+    CREATE OR REPLACE FUNCTION public.match_rag_chunks (
+      query_embedding vector(1536),
+      match_threshold float,
+      match_count int
+    )
+    RETURNS TABLE (
+      id TEXT,
+      source_id TEXT,
+      title TEXT,
+      url TEXT,
+      publisher TEXT,
+      content TEXT,
+      metadata JSONB,
+      similarity float
+    )
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RETURN QUERY
+      SELECT
+        rag_chunks.chunk_id::text AS id,
+        rag_chunks.source_id::text AS source_id,
+        rag_sources.title,
+        rag_sources.url,
+        rag_sources.publisher,
+        rag_chunks.text AS content,
+        rag_chunks.metadata,
+        1 - (rag_chunks.embedding <=> query_embedding) AS similarity
+      FROM public.rag_chunks
+      JOIN public.rag_sources ON rag_sources.source_id = rag_chunks.source_id
+      WHERE 1 - (rag_chunks.embedding <=> query_embedding) > match_threshold
+      ORDER BY rag_chunks.embedding <=> query_embedding
+      LIMIT match_count;
+    END;
+    $$;
     -- =========================================================================
     -- [유틸리티] Supabase Auth 회원가입 시 public.profiles 테이블 자동 생성 트리거
     -- =========================================================================
@@ -151,6 +201,8 @@ IF NOT EXISTS vector;
     ALTER TABLE public.rag_sources
         ENABLE ROW LEVEL SECURITY;
     ALTER TABLE public.rag_chunks
+        ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.plant_catalog
         ENABLE ROW LEVEL SECURITY;
     -- 예시 보안 정책 (자신의 데이터만 보고 쓸 수 있도록 허용)
     -- 1) 프로필: 누구나 읽을 수 있고 자기 프로필만 수정 가능
@@ -205,3 +257,24 @@ IF NOT EXISTS vector;
     SELECT
     USING
         (true);
+    CREATE POLICY "Allow public read access to plant_catalog" ON public.plant_catalog FOR
+    SELECT
+    USING
+        (true);
+
+    -- =========================================================================
+    -- [권한] Supabase API 역할별 명시적 권한 (GRANT) 부여
+    -- =========================================================================
+    -- postgres, service_role 역할은 스키마 내 모든 권한 소유
+    GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role;
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres, service_role;
+    GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO postgres, service_role;
+
+    -- 인증된 사용자(authenticated)는 테이블 CRUD 가능 (실제 데이터 접근 범위는 RLS가 제한)
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated;
+
+    -- 비인증 사용자(anon)는 조회만 가능
+    GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon;
+    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO anon;

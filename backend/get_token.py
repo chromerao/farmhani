@@ -1,3 +1,5 @@
+# 테스트용 토큰 발급기 입니다!
+
 import sys
 import os
 from supabase import create_client

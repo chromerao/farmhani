@@ -13,6 +13,18 @@ supabase: Client = create_client(
     supabase_key=settings.SUPABASE_ANON_KEY
 )
 
+def get_supabase_service_client() -> Client:
+    """
+    Server-side Supabase client for trusted operations such as Storage uploads.
+    It must never be exposed to browser code.
+    """
+    service_key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY
+    return create_client(
+        supabase_url=settings.SUPABASE_URL,
+        supabase_key=service_key,
+        options=ClientOptions(persist_session=False)
+    )
+
 def get_supabase_client(
     credentials: HTTPAuthorizationCredentials = Depends(reusable_oauth2)
 ) -> Client:
@@ -25,8 +37,10 @@ def get_supabase_client(
     client = create_client(
         supabase_url=settings.SUPABASE_URL,
         supabase_key=settings.SUPABASE_ANON_KEY,
-        options=ClientOptions(persist_session=False)
+        options=ClientOptions(
+            persist_session=False,
+            headers={"Authorization": f"Bearer {token}"}
+        )
     )
     client.postgrest.auth(token)
     return client
-

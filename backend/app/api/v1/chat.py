@@ -1,74 +1,174 @@
+import os
 import uuid
-from fastapi import APIRouter, status
-from app.schemas.chat import PlantCareChatRequest, PlantCareChatResponse, Citation
+from datetime import datetime
+from typing import List
+from fastapi import APIRouter, status, Depends, HTTPException, Path, Query
+from supabase import Client
+from app.auth.security import get_current_user
+from app.core.config import settings
+from app.db.session import get_supabase_client
+from app.schemas.chat import PlantCareChatRequest, PlantCareChatResponse, Citation, ChatSession, ChatMessage, ChatModelInfo
+from app.services.rag.pipeline import chat_mode_prefix, run_rag_workflow
 
 router = APIRouter(prefix="/chat", tags=["Plant Care RAG Chat"])
 
-@router.post("/plant-care", response_model=PlantCareChatResponse, status_code=status.HTTP_200_OK, summary="식물 케어 RAG 상담 실행")
-async def consult_plant_care(request: PlantCareChatRequest):
-    """
-    제공된 식물 ID, 최근 재배 일지, 업로드 사진을 기반으로 공공 원예 문서 RAG 모델을 구동하여 상태 진단 및 처방 가이드를 반환합니다. (Mock 데이터)
-    """
-    # 사용자의 질문 키워드에 따라 분기하여 적절한 Mock 데이터 응답
-    question_lower = request.question.lower()
-    
-    if "노랗" in question_lower or "yellow" in question_lower or "잎 끝" in question_lower:
-        return PlantCareChatResponse(
-            summary="과습 또는 질소 부족으로 인한 잎 황화 현상 및 끝마름 증상 의심",
-            possibleCauses=[
-                "분 흙의 배수 불량 및 잦은 물주기로 인한 뿌리 호흡 장애 (과습)",
-                "재배 기간 경과에 따른 토양 내 양분(특히 질소) 결핍",
-                "실내 건조로 인한 잎 세포의 부분 탈수"
-            ],
-            todayActions=[
-                "화분 흙의 겉 부분뿐만 아니라 손가락 한 마디 깊이까지 흙이 완전히 말랐는지 확인한 후 물을 주십시오.",
-                "화분 밑 물받이에 고인 물은 뿌리 부패를 촉진하므로 즉시 비워주십시오.",
-                "실내 습도 유지를 위해 잎 주변에 가볍게 분무를 해주거나 가습기를 가동하십시오."
-            ],
-            observationChecklist=[
-                "새로 돋아나는 잎도 노랗게 변하는지 여부",
-                "줄기 밑동 부분이 물러지거나 어두운 갈색으로 변하는지 여부",
-                "흙 표면에 곰팡이가 생기거나 퀴퀴한 냄새가 나는지 점검"
-            ],
-            citations=[
-                Citation(
-                    sourceId="RAG-DOC-001",
-                    title="실내정원 유지관리 가이드라인 - 물관리 요령",
-                    url="https://www.nihhs.go.kr",
-                    publisher="국립원예특작과학원"
-                ),
-                Citation(
-                    sourceId="RAG-DOC-002",
-                    title="농사로 실내식물 생리장해 대처법",
-                    url="http://www.nongsaro.go.kr",
-                    publisher="농촌진흥청"
-                )
-            ],
-            safetyNotice="본 정보는 공식 문서에 기반한 관리 가이드라인일 뿐이며 특정 식물 병해충에 대한 법적 효력을 가진 확정 진단이 아닙니다. 증상이 지속되거나 악화될 경우 농업기술센터 전문가의 검진을 받으시기 바랍니다."
-        )
-    
-    # 기본 Mock 응답
-    return PlantCareChatResponse(
-        summary="식물 관리 및 생육 상태 분석 보고",
-        possibleCauses=[
-            "계절적 환경 변화(조도 부족 또는 급격한 온도 변화)에 따른 적응 반응",
-            "토양 영양 불균형 및 환기 부족"
-        ],
-        todayActions=[
-            "통풍이 잘되는 밝은 반음지로 화분을 이동시켜 주십시오.",
-            "물주기 전 흙 상태를 반드시 손가락으로 찔러보고 체크하십시오."
-        ],
-        observationChecklist=[
-            "잎 뒷면에 응애나 진딧물 등의 미세 해충이 생겼는지 루페 또는 휴대폰 카메라 줌을 통해 확인하십시오.",
-            "주 1회 평균 기온과 환기 횟수를 기록해 두십시오."
-        ],
-        citations=[
-            Citation(
-                sourceId="RAG-DOC-999",
-                title="도시농업 병해충 및 생리장해 도감",
-                url="http://www.nongsaro.go.kr",
-                publisher="농촌진흥청"
-            )
-        ],
-        safetyNotice="본 상담 결과는 입력하신 텍스트와 사진에 기반하여 참고용으로 생성되었습니다. 화학 농약을 살포하기 전 반드시 적용 대상을 확인하고 안전사용기준을 준수하십시오."
+
+def fallback_session_title(db: Client, plant_id: str | None, created_at: str) -> str:
+    if plant_id:
+        try:
+            plant = db.table("plants").select("name,species").eq("id", plant_id).limit(1).execute()
+            if plant.data:
+                label = plant.data[0].get("name") or plant.data[0].get("species")
+                if label:
+                    return f"{label} 상담"
+        except Exception:
+            pass
+    try:
+        return f"상담 {datetime.fromisoformat(created_at).strftime('%m/%d %H:%M')}"
+    except Exception:
+        return "식물 상담"
+
+@router.get("/model-info", response_model=ChatModelInfo, summary="식물 상담 AI 모델 정보 조회")
+async def get_chat_model_info():
+    return ChatModelInfo(
+        chatModel=os.getenv("CHAT_MODEL") or settings.CHAT_MODEL,
+        visionModel=os.getenv("VISION_MODEL") or settings.VISION_MODEL
     )
+
+@router.post("/plant-care", response_model=PlantCareChatResponse, status_code=status.HTTP_200_OK, summary="식물 케어 RAG 상담 실행")
+async def consult_plant_care(
+    request: PlantCareChatRequest,
+    current_user_id: uuid.UUID = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
+):
+    """
+    제공된 식물 ID, 최근 재배 일지, 업로드 사진을 기반으로 공공 원예 문서 RAG 모델을 구동하여 상태 진단 및 처방 가이드를 반환합니다.
+    """
+    try:
+        final_answer = run_rag_workflow(
+            db_client=db,
+            user_id=str(current_user_id),
+            plant_id=str(request.plantId),
+            care_log_id=str(request.careLogId) if request.careLogId else None,
+            photo_id=str(request.photoId) if request.photoId else None,
+            question=request.question,
+            new_session=request.newSession,
+            response_mode=request.responseMode,
+            recent_messages=[message.model_dump() for message in request.recentMessages],
+            session_id=str(request.sessionId) if request.sessionId else None
+        )
+        
+        citations = []
+        for cit in final_answer["citations"]:
+            citations.append(Citation(
+                sourceId=cit["sourceId"],
+                title=cit["title"],
+                url=cit.get("url"),
+                publisher=cit.get("publisher"),
+                excerpt=cit.get("excerpt"),
+                section=cit.get("section")
+            ))
+            
+        return PlantCareChatResponse(
+            summary=final_answer["summary"],
+            possibleCauses=final_answer["possibleCauses"],
+            todayActions=final_answer["todayActions"],
+            observationChecklist=final_answer["observationChecklist"],
+            citations=citations,
+            safetyNotice=final_answer.get("safetyNotice"),
+            sessionId=uuid.UUID(final_answer["sessionId"]) if final_answer.get("sessionId") else None,
+            messageId=uuid.UUID(final_answer["messageId"]) if final_answer.get("messageId") else None
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"식물 상담 RAG 수행 중 오류가 발생했습니다: {str(e)}"
+        )
+
+@router.get("/sessions", response_model=List[ChatSession], summary="상담 세션 목록 조회")
+async def list_chat_sessions(
+    plantId: uuid.UUID | None = Query(None, description="특정 식물의 상담 세션만 조회"),
+    responseMode: str | None = Query(None, pattern="^(expert|companion)$", description="상담 모드별 세션 필터"),
+    current_user_id: uuid.UUID = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
+):
+    try:
+        query = db.table("chat_sessions").select("*").eq("user_id", str(current_user_id))
+        if plantId:
+            query = query.eq("plant_id", str(plantId))
+        if responseMode:
+            query = query.like("title", f"{chat_mode_prefix(responseMode)}%")
+        response = query.order("created_at", desc=True).execute()
+        sessions = []
+        for item in response.data:
+            sessions.append(ChatSession(
+                id=uuid.UUID(item["id"]),
+                userId=uuid.UUID(item["user_id"]),
+                plantId=uuid.UUID(item["plant_id"]) if item.get("plant_id") else None,
+                title=item.get("title") or fallback_session_title(db, item.get("plant_id"), item.get("created_at", "")),
+                createdAt=datetime.fromisoformat(item["created_at"])
+            ))
+        return sessions
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"상담 세션 목록 조회 중 오류가 발생했습니다: {str(e)}"
+        )
+
+@router.get("/sessions/{sessionId}/messages", response_model=List[ChatMessage], summary="세션별 대화 메시지 이력 조회")
+async def list_chat_messages(
+    sessionId: uuid.UUID = Path(..., description="세션 UUID"),
+    current_user_id: uuid.UUID = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
+):
+    try:
+        session_check = db.table("chat_sessions").select("user_id").eq("id", str(sessionId)).execute()
+        if not session_check.data or session_check.data[0]["user_id"] != str(current_user_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="상담 세션을 찾을 수 없거나 해당 세션에 대한 권한이 없습니다."
+            )
+            
+        response = db.table("chat_messages").select("*").eq("session_id", str(sessionId)).order("created_at", desc=False).execute()
+        messages = []
+        for item in response.data:
+            citations_data = item.get("citations") or []
+            citations = []
+            for cit in citations_data:
+                citations.append(Citation(
+                    sourceId=cit.get("sourceId") or cit.get("source_id"),
+                    title=cit.get("title"),
+                    url=cit.get("url"),
+                    publisher=cit.get("publisher"),
+                    excerpt=cit.get("excerpt"),
+                    section=cit.get("section")
+                ))
+                
+            db_content = item.get("content")
+            content_text = ""
+            if isinstance(db_content, dict):
+                content_text = db_content.get("text", "")
+            else:
+                content_text = str(db_content) if db_content is not None else ""
+
+            messages.append(ChatMessage(
+                id=uuid.UUID(item["id"]),
+                sessionId=uuid.UUID(item["session_id"]),
+                sender=item.get("role") or item.get("sender") or "user",
+                content=content_text,
+                citations=citations,
+                createdAt=datetime.fromisoformat(item["created_at"])
+            ))
+        return messages
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"대화 메시지 조회 중 오류가 발생했습니다: {str(e)}"
+        )

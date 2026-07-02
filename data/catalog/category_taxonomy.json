@@ -1,0 +1,96 @@
+{
+  "version": "2026-07-01",
+  "categories": {
+    "plant_catalog": {
+      "label_ko": "식물명 검색 카탈로그",
+      "priority": 1,
+      "backend_use": ["plant_catalog", "autocomplete"],
+      "default_safety_tags": ["not_diagnosis"]
+    },
+    "indoor_care": {
+      "label_ko": "실내식물 기본 관리",
+      "priority": 1,
+      "backend_use": ["rag", "plant_catalog"],
+      "query_examples": ["몬스테라 잎이 처져요", "물을 얼마나 줘야 하나요"],
+      "default_safety_tags": ["not_diagnosis"]
+    },
+    "crop_care": {
+      "label_ko": "작물 재배 관리",
+      "priority": 1,
+      "backend_use": ["rag", "plant_catalog"],
+      "target_crops": ["토마토", "고추", "상추", "오이", "딸기"],
+      "default_safety_tags": ["not_diagnosis"]
+    },
+    "ornamental_care": {
+      "label_ko": "관상식물/화훼 기본 관리",
+      "priority": 1,
+      "backend_use": ["rag", "plant_catalog"],
+      "target_crops": ["장미", "벚나무", "벚꽃", "개나리", "해바라기", "국화", "튤립", "백합", "수국"],
+      "default_safety_tags": ["not_diagnosis"]
+    },
+    "herb": {
+      "label_ko": "허브/가정재배 식물",
+      "priority": 1,
+      "backend_use": ["rag", "plant_catalog"],
+      "target_crops": ["바질", "로즈마리", "민트", "라벤더"],
+      "default_safety_tags": ["not_diagnosis"]
+    },
+    "crop_growth_stage": {
+      "label_ko": "작물 육묘 생장단계",
+      "priority": 2,
+      "backend_use": ["rag", "growth_stage_reference", "image_manifest"],
+      "target_crops": ["고추", "토마토", "배추", "파프리카", "상추", "양배추"],
+      "default_safety_tags": ["not_diagnosis", "observation_reference_only"]
+    },
+    "pest_reference": {
+      "label_ko": "병해충 증상 참고",
+      "priority": 2,
+      "backend_use": ["rag", "symptom_reference"],
+      "target_crops": ["토마토", "고추", "상추", "오이", "딸기"],
+      "default_safety_tags": ["not_diagnosis", "expert_check_required"]
+    },
+    "pesticide_safety": {
+      "label_ko": "농약 안전사용기준 참고",
+      "priority": 3,
+      "backend_use": ["rag_safety_reference"],
+      "default_safety_tags": ["not_diagnosis", "expert_check_required", "pesticide_caution"]
+    },
+    "image_reference": {
+      "label_ko": "이미지/증상 참조",
+      "priority": 4,
+      "backend_use": ["image_manifest", "future_model_training"],
+      "default_safety_tags": ["not_diagnosis"]
+    },
+    "weekly_farming": {
+      "label_ko": "주간농사정보",
+      "priority": 4,
+      "backend_use": ["future_context", "seasonal_rag"],
+      "default_safety_tags": ["not_diagnosis"]
+    },
+    "weather_context": {
+      "label_ko": "농업기상 컨텍스트",
+      "priority": 5,
+      "backend_use": ["future_context"],
+      "default_safety_tags": ["not_diagnosis"]
+    }
+  },
+  "symptom_keywords": {
+    "leaf_yellowing": ["노랗게", "황화", "누렇게", "yellowing"],
+    "leaf_browning": ["갈변", "끝마름", "brown tip", "brown spot"],
+    "wilting": ["시듦", "처짐", "축 처짐", "wilting"],
+    "overwatering": ["과습", "배수", "뿌리썩음", "물 고임"],
+    "dryness": ["건조", "수분 부족", "마름", "dry soil"],
+    "pest_trace": ["벌레", "해충", "응애", "반점", "갉아먹은"],
+    "light_stress": ["직사광", "광 부족", "햇빛", "빛 부족"],
+    "temperature_stress": ["저온", "고온", "냉해", "온도"],
+    "growth_stage": ["떡잎", "본엽", "화방", "분지", "생장단계", "육묘"]
+  },
+  "safety_tags": {
+    "not_diagnosis": "확정 진단이 아닌 참고 정보",
+    "observation_reference_only": "관찰 기반 참고 정보이며 확정 진단이 아님",
+    "expert_check_required": "전문가 확인 필요",
+    "pesticide_caution": "농약/방제 정보는 라벨과 안전사용기준 확인 필요",
+    "expert_case_reference": "전문가 상담 사례 참고",
+    "source_terms_required": "출처별 이용조건 확인 필요"
+  }
+}

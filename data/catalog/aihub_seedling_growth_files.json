@@ -1,0 +1,39 @@
+{
+  "dataset_key": "71829",
+  "dataset_name": "In-door 육묘장 생장 데이터",
+  "source_url": "https://www.aihub.or.kr/aihubdata/data/view.do?aihubDataSe=data&currMenu=115&dataSetSn=71829&srchDataRealmCode=REALM004&topMenu=100",
+  "download_api": "https://api.aihub.or.kr/down/0.6/71829.do",
+  "priority_policy": {
+    "mvp": "Download label zips first. Source image and Other zips are too large for the RAG MVP.",
+    "rag_use": "Use JSON labels to summarize crop, seedling growth stage, image count, annotation type, and stage guidance."
+  },
+  "files": [
+    {"file_key": "553028", "split": "Training", "kind": "label", "priority": 1, "crop_name": "상추", "growth_stage": "떡잎", "filename": "TL_5.상추_2.떡잎.zip", "size": "10.78 MB"},
+    {"file_key": "553029", "split": "Training", "kind": "label", "priority": 1, "crop_name": "상추", "growth_stage": "본엽2매", "filename": "TL_5.상추_3.본엽2매.zip", "size": "23.20 MB"},
+    {"file_key": "553030", "split": "Training", "kind": "label", "priority": 1, "crop_name": "상추", "growth_stage": "본엽4매", "filename": "TL_5.상추_4.본엽4매.zip", "size": "13.09 MB"},
+    {"file_key": "553016", "split": "Training", "kind": "label", "priority": 1, "crop_name": "토마토", "growth_stage": "떡잎", "filename": "TL_2.토마토_2.떡잎.zip", "size": "3.59 MB"},
+    {"file_key": "553017", "split": "Training", "kind": "label", "priority": 1, "crop_name": "토마토", "growth_stage": "본엽2매", "filename": "TL_2.토마토_3.본엽2매.zip", "size": "17.24 MB"},
+    {"file_key": "553018", "split": "Training", "kind": "label", "priority": 1, "crop_name": "토마토", "growth_stage": "본엽4매~8매", "filename": "TL_2.토마토_4.본엽4매~8매.zip", "size": "69.39 MB"},
+    {"file_key": "553019", "split": "Training", "kind": "label", "priority": 1, "crop_name": "토마토", "growth_stage": "화방발생", "filename": "TL_2.토마토_5.화방발생.zip", "size": "7.85 MB"},
+    {"file_key": "553011", "split": "Training", "kind": "label", "priority": 2, "crop_name": "고추", "growth_stage": "떡잎", "filename": "TL_1.고추_2.떡잎.zip", "size": "3.42 MB"},
+    {"file_key": "553012", "split": "Training", "kind": "label", "priority": 2, "crop_name": "고추", "growth_stage": "본엽2매", "filename": "TL_1.고추_3.본엽2매.zip", "size": "10.72 MB"},
+    {"file_key": "553013", "split": "Training", "kind": "label", "priority": 2, "crop_name": "고추", "growth_stage": "본엽4매~8매", "filename": "TL_1.고추_4.본엽4매~8매.zip", "size": "45.53 MB"},
+    {"file_key": "553014", "split": "Training", "kind": "label", "priority": 2, "crop_name": "고추", "growth_stage": "본엽8매~10매", "filename": "TL_1.고추_5.본엽8매~10매.zip", "size": "10.32 MB"},
+    {"file_key": "553015", "split": "Training", "kind": "label", "priority": 2, "crop_name": "고추", "growth_stage": "분지발생", "filename": "TL_1.고추_6.분지발생.zip", "size": "5.50 MB"},
+    {"file_key": "553020", "split": "Training", "kind": "label", "priority": 2, "crop_name": "파프리카", "growth_stage": "떡잎", "filename": "TL_3.파프리카_2.떡잎.zip", "size": "2.99 MB"},
+    {"file_key": "553021", "split": "Training", "kind": "label", "priority": 2, "crop_name": "파프리카", "growth_stage": "본엽2매", "filename": "TL_3.파프리카_3.본엽2매.zip", "size": "9.76 MB"},
+    {"file_key": "553022", "split": "Training", "kind": "label", "priority": 2, "crop_name": "파프리카", "growth_stage": "본엽4매~8매", "filename": "TL_3.파프리카_4.본엽4매~8매.zip", "size": "45.11 MB"},
+    {"file_key": "553023", "split": "Training", "kind": "label", "priority": 2, "crop_name": "파프리카", "growth_stage": "본엽8매~10매", "filename": "TL_3.파프리카_5.본엽8매~10매.zip", "size": "9.12 MB"},
+    {"file_key": "553024", "split": "Training", "kind": "label", "priority": 2, "crop_name": "파프리카", "growth_stage": "분지발생", "filename": "TL_3.파프리카_6.분지발생.zip", "size": "4.65 MB"},
+    {"file_key": "553025", "split": "Training", "kind": "label", "priority": 2, "crop_name": "배추", "growth_stage": "떡잎", "filename": "TL_4.배추_2.떡잎.zip", "size": "11.80 MB"},
+    {"file_key": "553026", "split": "Training", "kind": "label", "priority": 2, "crop_name": "배추", "growth_stage": "본엽2매", "filename": "TL_4.배추_3.본엽2매.zip", "size": "25.55 MB"},
+    {"file_key": "553027", "split": "Training", "kind": "label", "priority": 2, "crop_name": "배추", "growth_stage": "본엽4매", "filename": "TL_4.배추_4.본엽4매.zip", "size": "13.56 MB"},
+    {"file_key": "553031", "split": "Training", "kind": "label", "priority": 2, "crop_name": "양배추", "growth_stage": "떡잎", "filename": "TL_6.양배추_2.떡잎.zip", "size": "12.30 MB"},
+    {"file_key": "553032", "split": "Training", "kind": "label", "priority": 2, "crop_name": "양배추", "growth_stage": "본엽2매", "filename": "TL_6.양배추_3.본엽2매.zip", "size": "25.91 MB"},
+    {"file_key": "553033", "split": "Training", "kind": "label", "priority": 2, "crop_name": "양배추", "growth_stage": "본엽4매", "filename": "TL_6.양배추_4.본엽4매.zip", "size": "15.67 MB"},
+    {"file_key": "553074", "split": "Validation", "kind": "label", "priority": 3, "crop_name": "상추", "growth_stage": "떡잎", "filename": "VL_5.상추_2.떡잎.zip", "size": "1.09 MB"},
+    {"file_key": "553075", "split": "Validation", "kind": "label", "priority": 3, "crop_name": "상추", "growth_stage": "본엽2매", "filename": "VL_5.상추_3.본엽2매.zip", "size": "2.93 MB"},
+    {"file_key": "553076", "split": "Validation", "kind": "label", "priority": 3, "crop_name": "상추", "growth_stage": "본엽4매", "filename": "VL_5.상추_4.본엽4매.zip", "size": "1.23 MB"},
+    {"file_key": "552867", "split": "Other", "kind": "other", "priority": 9, "filename": "Other.zip", "size": "80.62 GB", "note": "Do not download for MVP."}
+  ]
+}
