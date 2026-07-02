@@ -16,6 +16,55 @@ class SearchResult:
         self.metadata = metadata
         self.score = score
 
+
+STOPWORDS = {
+    "식물", "작물", "사진", "분석", "상태", "관리", "질문", "현재", "공식", "문서",
+    "어떻게", "해주세요", "알려줘", "알려주세요", "가능성", "상담", "진단",
+    "plant", "care", "photo", "image", "document", "official",
+}
+
+CARE_TERMS = {
+    "물주기", "물관리", "키우기", "키우는", "방법", "관리법", "가이드", "재배", "재배법",
+    "햇빛", "광량", "온도", "습도", "흙", "분갈이", "비료", "병해충", "잎", "줄기",
+}
+
+
+def tokenize_query(query: str) -> List[str]:
+    clean_query = query.replace(",", " ").replace("?", " ").replace(".", " ").replace("/", " ")
+    tokens = []
+    for token in clean_query.split():
+        token = token.strip().lower()
+        if len(token) <= 1 or token in STOPWORDS:
+            continue
+        tokens.append(token)
+    return tokens
+
+
+def specific_query_terms(query: str) -> List[str]:
+    return [token for token in tokenize_query(query) if token not in CARE_TERMS and len(token) >= 2]
+
+
+def filter_by_specific_terms(query: str, results: List[SearchResult]) -> List[SearchResult]:
+    terms = specific_query_terms(query)
+    if not terms:
+        return results
+
+    filtered = []
+    for result in results:
+        metadata = result.metadata or {}
+        haystack = " ".join(
+            str(part or "")
+            for part in [
+                result.content,
+                metadata.get("title"),
+                metadata.get("section"),
+                metadata.get("excerpt"),
+            ]
+        ).lower()
+        if any(term.lower() in haystack for term in terms):
+            filtered.append(result)
+    return filtered
+
 def normalize_metadata(item: Dict[str, Any]) -> Dict[str, Any]:
     metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
     nested_source = item.get("rag_sources") if isinstance(item.get("rag_sources"), dict) else {}
@@ -63,8 +112,7 @@ def supabase_keyword_search(query: str, top_k: int = 3) -> List[SearchResult]:
     pgvector RPC가 없거나 스키마 버전 차이로 실패하는 환경에서 Supabase RAG 테이블을 직접 읽는 fallback입니다.
     데이터팀 최신 스키마인 rag_chunks.text / symptom_keywords / metadata를 우선 사용합니다.
     """
-    clean_query = query.replace(",", " ").replace("?", " ").replace(".", " ")
-    query_tokens = [token.strip() for token in clean_query.split() if len(token.strip()) > 1]
+    query_tokens = tokenize_query(query)
     if not query_tokens:
         return []
 
@@ -95,7 +143,7 @@ def supabase_keyword_search(query: str, top_k: int = 3) -> List[SearchResult]:
         if not isinstance(keywords, list):
             keywords = [str(keywords)]
         score = score_text(query_tokens, content, keywords)
-        if score > 0:
+        if score >= 2.0:
             results.append(SearchResult(content=content, metadata=normalize_metadata(item), score=score))
 
     results.sort(key=lambda result: result.score, reverse=True)
@@ -112,8 +160,7 @@ def fallback_keyword_search(query: str, top_k: int = 3) -> List[SearchResult]:
     with open(docs_json_path, "r", encoding="utf-8") as f:
         docs = json.load(f)
         
-    clean_query = query.replace(",", " ").replace("?", " ").replace(".", " ")
-    query_tokens = [token.strip() for token in clean_query.split() if len(token) > 0]
+    query_tokens = tokenize_query(query)
     
     results = []
     for doc in docs:
@@ -125,7 +172,7 @@ def fallback_keyword_search(query: str, top_k: int = 3) -> List[SearchResult]:
             if token in doc["content"]:
                 score += 1.0
                 
-        if score > 0.0:
+        if score >= 2.0:
             metadata = {
                 "source_id": doc["id"],
                 "title": doc["title"],
@@ -166,7 +213,7 @@ def search_documents(query: str, top_k: int = 3) -> List[SearchResult]:
                 "match_rag_chunks",
                 {
                     "query_embedding": query_vector,
-                    "match_threshold": 0.2,
+                    "match_threshold": 0.32,
                     "match_count": top_k
                 }
             ).execute()
@@ -184,11 +231,12 @@ def search_documents(query: str, top_k: int = 3) -> List[SearchResult]:
                 ))
             keyword_results = supabase_keyword_search(query, top_k)
             if vector_results or keyword_results:
-                return merge_results(keyword_results, vector_results, top_k=top_k)
+                merged_results = merge_results(keyword_results, vector_results, top_k=top_k)
+                return filter_by_specific_terms(query, merged_results)[:top_k]
         except Exception as e:
             print(f"[RAG SEARCH WARNING] Supabase pgvector RPC 검색 중 오류 발생, Supabase keyword fallback 전환: {e}")
 
     supabase_results = supabase_keyword_search(query, top_k)
     if supabase_results:
-        return supabase_results
-    return fallback_keyword_search(query, top_k)
+        return filter_by_specific_terms(query, supabase_results)[:top_k]
+    return filter_by_specific_terms(query, fallback_keyword_search(query, top_k))[:top_k]

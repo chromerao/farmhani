@@ -67,6 +67,7 @@ export type ChatSession = {
   id: string;
   userId: string;
   plantId?: string | null;
+  title?: string | null;
   createdAt: string;
 };
 

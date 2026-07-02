@@ -19,6 +19,34 @@ def make_excerpt(text: str, max_len: int = 220) -> str:
         return clean
     return clean[:max_len].rstrip() + "..."
 
+
+def is_smalltalk_question(question: str) -> bool:
+    normalized = " ".join((question or "").strip().lower().split())
+    if not normalized:
+        return True
+    greetings = {
+        "hi",
+        "hello",
+        "hey",
+        "안녕",
+        "안녕하세요",
+        "안녕?",
+        "안녕하세요?",
+        "고마워",
+        "감사합니다",
+    }
+    return normalized in greetings or (len(normalized) <= 8 and any(word in normalized for word in greetings))
+
+
+def make_session_title(plant: Dict[str, Any], question: str) -> str:
+    plant_label = (plant.get("name") or plant.get("species") or "식물").strip()
+    clean_question = " ".join((question or "").split())
+    if len(clean_question) > 24:
+        clean_question = clean_question[:24].rstrip() + "..."
+    if not clean_question:
+        clean_question = "상담"
+    return f"{plant_label} · {clean_question}"
+
 class AgentState(TypedDict):
     # 입력 정보
     db_client: Client
@@ -174,6 +202,9 @@ def build_retrieval_query(state: AgentState) -> Dict[str, Any]:
     signals = ", ".join(state["image_signals"])
     context = state.get("user_context", "")
     image_description = state.get("image_description") or ""
+
+    if is_smalltalk_question(question):
+        return {"search_query": ""}
     
     query_text = (
         f"식물: {plant.get('species') or plant.get('name')}. "
@@ -186,7 +217,24 @@ def build_retrieval_query(state: AgentState) -> Dict[str, Any]:
 
 # 5. retrieve_docs 노드
 def retrieve_docs(state: AgentState) -> Dict[str, Any]:
-    query = state["search_query"]
+    if is_smalltalk_question(state.get("question") or ""):
+        return {"retrieved_docs": []}
+    plant = state.get("plant_data") or {}
+    question = state.get("question") or ""
+    compact_query = " ".join(
+        str(part)
+        for part in [
+            plant.get("name"),
+            plant.get("species"),
+            question,
+            ", ".join(state.get("image_signals") or []),
+            state.get("image_description") or "",
+        ]
+        if part
+    )
+    query = compact_query or state["search_query"]
+    if not query.strip():
+        return {"retrieved_docs": []}
     search_results = search_documents(query, top_k=4)
     
     docs = []
@@ -212,6 +260,19 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
     image_description = state.get("image_description") or "사진 분석 결과 없음"
     vision_error = state.get("vision_error")
     
+    if is_smalltalk_question(question):
+        plant = state.get("plant_data") or {}
+        plant_label = plant.get("name") or plant.get("species") or "식물"
+        return {
+            "draft_answer": {
+                "summary": f"안녕하세요. {plant_label} 상담을 도와드릴게요. 물주기, 빛, 잎 상태, 흙 상태, 사진 진단 중 궁금한 내용을 편하게 적어주세요.",
+                "possibleCauses": ["아직 구체적인 증상이나 관리 질문이 입력되지 않았습니다."],
+                "todayActions": ["궁금한 점을 한 문장으로 적거나, 상태 사진을 첨부해 주세요."],
+                "observationChecklist": ["잎 색 변화", "흙 마름 정도", "최근 물 준 날짜", "빛을 받는 시간"],
+                "citations": [],
+            }
+        }
+
     citations = []
     seen_sources = set()
     for doc in docs:
@@ -421,15 +482,21 @@ def persist_result(state: AgentState) -> Dict[str, Any]:
     
     session_res = None
     if not state.get("new_session"):
-        session_res = db.table("chat_sessions").select("id").eq("user_id", user_id).eq("plant_id", plant_id).order("created_at", desc=True).limit(1).execute()
+        session_res = db.table("chat_sessions").select("id,title").eq("user_id", user_id).eq("plant_id", plant_id).order("created_at", desc=True).limit(1).execute()
     
     if session_res and session_res.data:
         session_id = session_res.data[0]["id"]
+        if not session_res.data[0].get("title"):
+            try:
+                db.table("chat_sessions").update({"title": make_session_title(state["plant_data"], question)}).eq("id", session_id).execute()
+            except Exception:
+                pass
     else:
         new_session = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
-            "plant_id": plant_id
+            "plant_id": plant_id,
+            "title": make_session_title(state["plant_data"], question)
         }
         db.table("chat_sessions").insert(new_session).execute()
         session_id = new_session["id"]

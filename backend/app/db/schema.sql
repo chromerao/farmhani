@@ -62,6 +62,7 @@ IF NOT EXISTS vector;
             DELETE
             SET
                 NULL,
+                title TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL );
     -- 7. chat_messages (상담 대화 이력 테이블)
     CREATE TABLE IF NOT EXISTS public.chat_messages

@@ -32,6 +32,7 @@ class ChatSession(BaseModel):
     id: UUID
     userId: UUID
     plantId: Optional[UUID] = None
+    title: Optional[str] = None
     createdAt: datetime
 
 class ChatMessage(BaseModel):

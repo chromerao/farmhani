@@ -10,6 +10,22 @@ from app.services.rag.pipeline import run_rag_workflow
 
 router = APIRouter(prefix="/chat", tags=["Plant Care RAG Chat"])
 
+
+def fallback_session_title(db: Client, plant_id: str | None, created_at: str) -> str:
+    if plant_id:
+        try:
+            plant = db.table("plants").select("name,species").eq("id", plant_id).limit(1).execute()
+            if plant.data:
+                label = plant.data[0].get("name") or plant.data[0].get("species")
+                if label:
+                    return f"{label} 상담"
+        except Exception:
+            pass
+    try:
+        return f"상담 {datetime.fromisoformat(created_at).strftime('%m/%d %H:%M')}"
+    except Exception:
+        return "식물 상담"
+
 @router.post("/plant-care", response_model=PlantCareChatResponse, status_code=status.HTTP_200_OK, summary="식물 케어 RAG 상담 실행")
 async def consult_plant_care(
     request: PlantCareChatRequest,
@@ -79,6 +95,7 @@ async def list_chat_sessions(
                 id=uuid.UUID(item["id"]),
                 userId=uuid.UUID(item["user_id"]),
                 plantId=uuid.UUID(item["plant_id"]) if item.get("plant_id") else None,
+                title=item.get("title") or fallback_session_title(db, item.get("plant_id"), item.get("created_at", "")),
                 createdAt=datetime.fromisoformat(item["created_at"])
             ))
         return sessions

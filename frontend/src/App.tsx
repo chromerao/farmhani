@@ -1173,9 +1173,10 @@ function App() {
   function chatSessionItemHtml(session: ChatSession, index: number) {
     const selected = localStorage.getItem(LAST_SESSION_ID_KEY) === session.id || index === 0;
     const className = selected ? "text-primary font-bold" : "text-on-surface-variant";
+    const title = session.title?.trim() || `상담 ${formatDate(session.createdAt)}`;
     return `<div class="flex items-center gap-3 p-3 mb-1 cursor-pointer hover:bg-growth-light rounded-lg ${className}" data-chat-session="${escapeHtml(session.id)}">
       <span class="material-symbols-outlined">eco</span>
-      <span class="font-label-md">상담 ${formatDate(session.createdAt)}</span>
+      <span class="font-label-md truncate" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
     </div>`;
   }
 
@@ -1208,12 +1209,16 @@ function App() {
     if (!textarea || !sendButton) return;
     const chatInput = textarea;
     const chatSendButton = sendButton;
+    let isSubmitting = false;
 
     async function submit() {
+      if (isSubmitting) return;
       const question = chatInput.value.trim();
       if (!question) return;
+      isSubmitting = true;
 
       if (hasSupabaseAuthConfig() && !getAccessToken()) {
+        isSubmitting = false;
         frameAlert(doc, "AI 상담은 로그인 후 사용할 수 있습니다.");
         navigate("login");
         return;
@@ -1251,6 +1256,7 @@ function App() {
         pendingChatPhotoRef.current = null;
         pendingChatPhotoNoteRef.current = "";
         setChatAttachmentStatus(doc, null);
+        isSubmitting = false;
       }
     }
 
@@ -1259,7 +1265,7 @@ function App() {
       void submit();
     });
     chatInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
         event.preventDefault();
         void submit();
       }
