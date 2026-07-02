@@ -202,6 +202,9 @@ def build_retrieval_query(state: AgentState) -> Dict[str, Any]:
     signals = ", ".join(state["image_signals"])
     context = state.get("user_context", "")
     image_description = state.get("image_description") or ""
+
+    if is_smalltalk_question(question):
+        return {"search_query": ""}
     
     openai_key = os.getenv("OPENAI_API_KEY") or settings.OPENAI_API_KEY
     if openai_key:
@@ -304,7 +307,7 @@ def grade_or_rerank(state: AgentState) -> Dict[str, Any]:
                     
         # 필터링 후에도 문서가 없으면(모두 no인 경우) 원본 상위 2개라도 살림
         if not filtered_docs:
-            filtered_docs = docs[:2]
+            filtered_docs = []
             
         return {"retrieved_docs": filtered_docs}
     except Exception as e:
@@ -371,8 +374,8 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
                         "content": (
                             "당신은 식물 관리 상담을 돕는 AI입니다. 반드시 사용자의 식물 정보, 최근 관리 기록, 검색된 공식 문서만 근거로 답하세요. "
                             "모든 답변은 JSON 객체만 출력합니다. "
-                            "필드: reasoning(string), summary(string), possibleCauses(string[]), todayActions(string[]), observationChecklist(string[]). "
-                            "reasoning 필드에는 증상과 문서를 비교분석하는 '생각의 흐름'을 먼저 서술하세요. "
+                            "필드: evidenceNotes(string), summary(string), possibleCauses(string[]), todayActions(string[]), observationChecklist(string[]). "
+                            "evidenceNotes 필드에는 사용자에게 보여줄 수 있는 짧은 근거 요약만 작성하세요. 내부 추론 과정이나 생각의 흐름은 출력하지 마세요. "
                             "summary는 한 문단의 자연스러운 상담 말투로 작성하고, todayActions는 사용자가 바로 따라 할 수 있는 구체적인 행동으로 작성하세요. "
                             "질병명 확정, 농약 직접 처방, 과도한 단정은 피하고 '~가능성', '관찰 필요' 중심으로 말하세요. "
                             "사진 분석 결과가 있으면 이를 관찰 근거로 반영하되, 사진만으로 확정 진단하지 마세요. "
