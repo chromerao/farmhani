@@ -22,7 +22,7 @@ async def list_or_search_catalog(
         if q:
             term = clean_search_term(q)
             if term:
-                query = query.or_(f"name.ilike.%{term}%,species.ilike.%{term}%")
+                query = query.or_(f"name.ilike.%{term}%,species.ilike.%{term}%,description.ilike.%{term}%")
             
         response = query.limit(limit).execute()
         

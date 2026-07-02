@@ -1,12 +1,23 @@
 import os
 import uuid
+import logging
 from typing import Dict, Any, List, Optional, TypedDict
 from datetime import datetime, date, timezone
 from supabase import Client
 
 from app.core.config import settings
 from app.services.rag.vectorstore import search_documents
+from app.services.rag.vision import VisionAnalysisError, analyze_plant_image
 from langgraph.graph import StateGraph, END
+
+logger = logging.getLogger(__name__)
+
+
+def make_excerpt(text: str, max_len: int = 220) -> str:
+    clean = " ".join((text or "").split())
+    if len(clean) <= max_len:
+        return clean
+    return clean[:max_len].rstrip() + "..."
 
 class AgentState(TypedDict):
     # 입력 정보
@@ -25,6 +36,8 @@ class AgentState(TypedDict):
     
     # 노드 결과물
     image_signals: List[str]
+    image_description: str
+    vision_error: Optional[str]
     user_context: str
     search_query: str
     retrieved_docs: List[Dict[str, Any]]
@@ -32,6 +45,7 @@ class AgentState(TypedDict):
     final_answer: Dict[str, Any]
     session_id: Optional[str]
     message_id: Optional[str]
+    new_session: bool
 
 # 1. validate_input 노드
 def validate_input(state: AgentState) -> Dict[str, Any]:
@@ -75,11 +89,13 @@ def validate_input(state: AgentState) -> Dict[str, Any]:
 
 # 2. extract_image_signals 노드
 def extract_image_signals(state: AgentState) -> Dict[str, Any]:
+    db = state["db_client"]
     photo = state.get("photo_data")
-    recent_photos = state.get("recent_photos") or []
     logs = state.get("care_logs") or []
     question = state["question"].lower()
     signals = []
+    image_description = ""
+    vision_error: Optional[str] = None
     
     # 간단한 키워드 추출 (Fallback)
     if "노랗" in question or "황화" in question or "색이 바" in question:
@@ -93,10 +109,14 @@ def extract_image_signals(state: AgentState) -> Dict[str, Any]:
     if photo and photo.get("note"):
         signals.append(f"사용자 사진 메모: {photo['note']}")
 
-    for item in recent_photos[:3]:
-        note = item.get("note")
-        if note and (not photo or item.get("id") != photo.get("id")):
-            signals.append(f"최근 사진 메모: {note}")
+    if photo and photo.get("storage_path"):
+        try:
+            analysis = analyze_plant_image(db, photo["storage_path"], state["question"])
+            signals.extend(analysis.get("signals") or [])
+            image_description = analysis.get("description") or ""
+        except VisionAnalysisError as exc:
+            vision_error = str(exc)
+            logger.warning("Vision analysis skipped: %s", exc)
 
     for log in logs[:3]:
         for label, field in [("잎 상태", "leaf_condition"), ("흙 상태", "soil_condition"), ("재배 메모", "memo")]:
@@ -104,14 +124,17 @@ def extract_image_signals(state: AgentState) -> Dict[str, Any]:
             if value:
                 signals.append(f"최근 {label}: {value}")
         
-    return {"image_signals": signals}
+    return {
+        "image_signals": signals,
+        "image_description": image_description,
+        "vision_error": vision_error,
+    }
 
 # 3. summarize_user_context 노드
 def summarize_user_context(state: AgentState) -> Dict[str, Any]:
     plant = state["plant_data"]
     logs = state["care_logs"]
     photo = state.get("photo_data") or {}
-    recent_photos = state.get("recent_photos") or []
     
     context_parts = [
         f"식물 별명: {plant.get('name') or '알 수 없음'}",
@@ -142,11 +165,6 @@ def summarize_user_context(state: AgentState) -> Dict[str, Any]:
         context_parts.append(
             f"상담 첨부 사진: 촬영일={photo.get('captured_at') or '미지정'}, 메모={photo.get('note') or '없음'}, 저장경로={photo.get('storage_path') or '없음'}"
         )
-    elif recent_photos:
-        photo_notes = [item.get("note") for item in recent_photos[:3] if item.get("note")]
-        if photo_notes:
-            context_parts.append("최근 사진 메모: " + " / ".join(photo_notes))
-        
     return {"user_context": " / ".join(context_parts)}
 
 # 4. build_retrieval_query 노드
@@ -155,11 +173,13 @@ def build_retrieval_query(state: AgentState) -> Dict[str, Any]:
     question = state["question"]
     signals = ", ".join(state["image_signals"])
     context = state.get("user_context", "")
+    image_description = state.get("image_description") or ""
     
     query_text = (
         f"식물: {plant.get('species') or plant.get('name')}. "
         f"사용자 질문: {question}. "
         f"관찰 징후: {signals}. "
+        f"사진 분석: {image_description}. "
         f"관리 맥락: {context}"
     )
     return {"search_query": query_text}
@@ -189,6 +209,8 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
     docs = state["retrieved_docs"]
     question = state["question"]
     context = state["user_context"]
+    image_description = state.get("image_description") or "사진 분석 결과 없음"
+    vision_error = state.get("vision_error")
     
     citations = []
     seen_sources = set()
@@ -202,7 +224,9 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
             "sourceId": source_id,
             "title": metadata.get("title") or "출처 미상",
             "url": metadata.get("url"),
-            "publisher": metadata.get("publisher")
+            "publisher": metadata.get("publisher"),
+            "excerpt": make_excerpt(doc.get("content") or ""),
+            "section": metadata.get("section") or metadata.get("category") or metadata.get("source_type")
         })
         
     if openai_key:
@@ -227,14 +251,19 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
                             "당신은 식물 관리 상담을 돕는 AI입니다. 반드시 사용자의 식물 정보, 최근 관리 기록, 검색된 공식 문서만 근거로 답하세요. "
                             "모든 답변은 JSON 객체만 출력합니다. "
                             "필드: summary(string), possibleCauses(string[]), todayActions(string[]), observationChecklist(string[]). "
+                            "summary는 한 문단의 자연스러운 상담 말투로 작성하고, todayActions는 사용자가 바로 따라 할 수 있는 구체적인 행동으로 작성하세요. "
                             "질병명 확정, 농약 직접 처방, 과도한 단정은 피하고 '~가능성', '관찰 필요' 중심으로 말하세요. "
-                            "검색 문서가 부족하면 부족하다고 말하고 추가 사진/물주기/빛/흙 상태 정보를 요청하세요."
+                            "사진 분석 결과가 있으면 이를 관찰 근거로 반영하되, 사진만으로 확정 진단하지 마세요. "
+                            "검색 문서가 부족하면 부족하다고 말하고 추가 사진/물주기/빛/흙 상태 정보를 요청하세요. "
+                            "답변 안에서 출처 번호를 직접 꾸며 쓰기보다, 근거 문서는 citations 영역으로 제공된다고 가정하세요."
                         )
                     },
                     {
                         "role": "user",
                         "content": (
                             f"[식물 정보]\n{context}\n\n"
+                            f"[사진 분석 결과]\n{image_description}\n\n"
+                            f"[사진 분석 참고]\n{vision_error or '오류 없음'}\n\n"
                             f"[검색된 공식 문서]\n{docs_text or '검색 문서 없음'}\n\n"
                             f"[사용자 질문]\n{question}"
                         )
@@ -259,7 +288,7 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
             print(f"[RAG LLM WARNING] OpenAI 답변 생성 중 실패, 룰베이스 전환: {e}")
             
     combined_docs_text = " ".join([d.get("content", "") for d in docs])
-    combined_signal_text = f"{question} {context} {combined_docs_text}".lower()
+    combined_signal_text = f"{question} {context} {image_description} {' '.join(state.get('image_signals') or [])} {combined_docs_text}".lower()
 
     if not docs:
         summary = "현재 질문과 식물 기록만으로는 공식 문서 근거가 충분하지 않아 확정적인 판단은 어렵습니다."
@@ -390,9 +419,11 @@ def persist_result(state: AgentState) -> Dict[str, Any]:
     final = state["final_answer"]
     question = state["question"]
     
-    session_res = db.table("chat_sessions").select("id").eq("user_id", user_id).eq("plant_id", plant_id).order("created_at", desc=True).limit(1).execute()
+    session_res = None
+    if not state.get("new_session"):
+        session_res = db.table("chat_sessions").select("id").eq("user_id", user_id).eq("plant_id", plant_id).order("created_at", desc=True).limit(1).execute()
     
-    if session_res.data:
+    if session_res and session_res.data:
         session_id = session_res.data[0]["id"]
     else:
         new_session = {
@@ -431,7 +462,9 @@ def persist_result(state: AgentState) -> Dict[str, Any]:
             "source_id": cit["sourceId"],
             "title": cit["title"],
             "url": cit["url"],
-            "publisher": cit["publisher"]
+            "publisher": cit["publisher"],
+            "excerpt": cit.get("excerpt"),
+            "section": cit.get("section")
         })
         
     assistant_message_payload = {
@@ -463,7 +496,8 @@ def run_rag_workflow(
     plant_id: str,
     care_log_id: Optional[str],
     photo_id: Optional[str],
-    question: str
+    question: str,
+    new_session: bool = False
 ) -> Dict[str, Any]:
     workflow = StateGraph(AgentState)
     
@@ -496,7 +530,8 @@ def run_rag_workflow(
         "plant_id": plant_id,
         "care_log_id": care_log_id,
         "photo_id": photo_id,
-        "question": question
+        "question": question,
+        "new_session": new_session
     }
     
     result = app.invoke(initial_state)

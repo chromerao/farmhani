@@ -12,6 +12,7 @@ import {
   listChatMessages,
   listChatSessions,
   searchPlantCatalog,
+  searchRagDocuments,
   signInWithPassword,
   signUpWithPassword,
   storagePathToPublicUrl,
@@ -39,7 +40,6 @@ const hashToPage: Record<string, DesignPage> = {
 };
 
 const SELECTED_PLANT_ID_KEY = "farmhani_selected_plant_id";
-const LAST_PHOTO_ID_KEY = "farmhani_last_photo_id";
 const LAST_SESSION_ID_KEY = "farmhani_last_session_id";
 const PENDING_DIAGNOSIS_QUESTION_KEY = "farmhani_pending_diagnosis_question";
 
@@ -124,7 +124,7 @@ function findPlantGrid(doc: Document) {
 }
 
 function plantCardHtml(plant: Plant, index: number) {
-  const image = plant.imageUrl || "/design/dashboard_plant.png";
+  const image = plant.imageUrl;
   const status = plant.healthScore && plant.healthScore < 70 ? "주의 필요" : "건강함";
   const badgeClass =
     status === "주의 필요"
@@ -133,7 +133,14 @@ function plantCardHtml(plant: Plant, index: number) {
 
   return `<div class="bg-surface-container-lowest rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all group cursor-pointer border border-outline-variant/10" data-plant-card="${escapeHtml(plant.id)}">
     <div class="relative h-48 overflow-hidden">
-      <img alt="${escapeHtml(plant.name)} 식물 사진" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" src="${escapeHtml(image)}">
+      ${
+        image
+          ? `<img alt="${escapeHtml(plant.name)} 식물 사진" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" src="${escapeHtml(image)}">`
+          : `<div class="w-full h-full bg-surface-container flex flex-col items-center justify-center text-on-surface-variant">
+              <span class="material-symbols-outlined text-4xl mb-2">hide_image</span>
+              <span class="text-label-md font-bold">사진 등록안함</span>
+            </div>`
+      }
       <div class="absolute top-4 right-4 ${badgeClass} backdrop-blur-md px-3 py-1 rounded-full text-label-sm font-bold flex items-center gap-1">
         <span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">${status === "주의 필요" ? "warning" : "check_circle"}</span>
         ${status}
@@ -174,6 +181,7 @@ function App() {
   const profilePhotoRef = useRef<File | null>(null);
   const pendingChatPhotoRef = useRef<File | null>(null);
   const pendingChatPhotoNoteRef = useRef("");
+  const forceNewChatSessionRef = useRef(false);
   const dashboardPlantsRef = useRef<Plant[]>([]);
 
   useEffect(() => {
@@ -290,6 +298,13 @@ function App() {
     const input = doc.getElementById("species-search") as HTMLInputElement | null;
     const buttons = Array.from(doc.querySelectorAll("#step-2 button")) as HTMLButtonElement[];
     if (!input || buttons.length === 0) return;
+    const speciesInput = input;
+    const searchBox = speciesInput.closest(".relative") as HTMLElement | null;
+    const dropdown = doc.createElement("div");
+    dropdown.className =
+      "absolute left-0 right-0 top-full mt-2 z-50 bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-lg overflow-hidden hidden";
+    dropdown.dataset.speciesDropdown = "true";
+    searchBox?.appendChild(dropdown);
 
     function applyCatalogItems(items: PlantCatalogItem[]) {
       items.slice(0, buttons.length).forEach((item, index) => {
@@ -303,24 +318,53 @@ function App() {
       });
     }
 
+    function renderSpeciesDropdown(items: PlantCatalogItem[]) {
+      dropdown.innerHTML = items.length
+        ? items
+            .slice(0, 8)
+            .map(
+              (item) => `<button class="w-full text-left px-4 py-3 hover:bg-growth-light transition-colors" data-name="${escapeHtml(item.name)}" data-species="${escapeHtml(item.species)}">
+                <span class="block text-label-md font-bold text-on-surface">${escapeHtml(item.name)}</span>
+                <span class="block text-label-sm text-on-surface-variant">${escapeHtml(item.species)}${item.familyName ? ` · ${escapeHtml(item.familyName)}` : ""}</span>
+              </button>`
+            )
+            .join("")
+        : `<div class="px-4 py-3 text-label-sm text-on-surface-variant">검색 결과가 없습니다. 직접 입력해도 됩니다.</div>`;
+      dropdown.classList.remove("hidden");
+      dropdown.querySelectorAll("button[data-species]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          const target = button as HTMLElement;
+          selectedSpeciesRef.current = target.dataset.species || target.dataset.name || "";
+          speciesInput.value = target.dataset.name || target.dataset.species || "";
+          dropdown.classList.add("hidden");
+        });
+      });
+    }
+
     buttons.forEach((button) => {
       button.addEventListener("click", (event) => {
         event.preventDefault();
         const species = button.dataset.species || normalizedText(button.querySelector("p.text-xs"));
         const name = button.dataset.name || normalizedText(button.querySelector("p.font-label-md"));
         selectedSpeciesRef.current = species || name;
-        input.value = name || species;
+        speciesInput.value = name || species;
       });
     });
 
     let timer = 0;
-    input.addEventListener("input", () => {
-      selectedSpeciesRef.current = input.value.trim();
+    speciesInput.addEventListener("input", () => {
+      selectedSpeciesRef.current = speciesInput.value.trim();
       window.clearTimeout(timer);
       timer = window.setTimeout(async () => {
-        const items = await searchPlantCatalog(input.value, buttons.length);
+        const items = await searchPlantCatalog(speciesInput.value, buttons.length);
         if (items.length > 0) applyCatalogItems(items);
+        renderSpeciesDropdown(items);
       }, 250);
+    });
+    speciesInput.addEventListener("focus", async () => {
+      const items = await searchPlantCatalog(speciesInput.value, 8);
+      renderSpeciesDropdown(items);
     });
   }
 
@@ -393,12 +437,12 @@ function App() {
 
         if (profilePhotoRef.current) {
           const photo = await uploadPlantPhoto(plant.id, profilePhotoRef.current, `${plantName} 프로필 사진`);
-          localStorage.setItem(LAST_PHOTO_ID_KEY, photo.id);
           const imageUrl = storagePathToPublicUrl(photo.storagePath);
           if (imageUrl) {
             await updatePlant(plant.id, { imageUrl }).catch(() => undefined);
           }
         }
+        profilePhotoRef.current = null;
         return true;
       } catch (error) {
         if (!handleApiError(doc, error)) {
@@ -479,13 +523,115 @@ function App() {
     return plants.filter((plant) => plantSearchText(plant).includes(term));
   }
 
-  function filterPlantsByCategory(plants: Plant[], category: "all" | "succulent" | "foliage") {
+  type DashboardPlantCategory = "all" | "indoor" | "crop" | "ornamental";
+
+  function filterPlantsByCategory(plants: Plant[], category: DashboardPlantCategory) {
     if (category === "all") return plants;
-    const keywords =
-      category === "succulent"
-        ? ["다육", "선인장", "스투키", "산세베리아", "succulent", "cactus", "sansevieria"]
-        : ["관엽", "몬스테라", "스파티필럼", "야자", "고무나무", "ficus", "monstera", "spathiphyllum", "palm"];
+    const keywordMap: Record<Exclude<DashboardPlantCategory, "all">, string[]> = {
+      indoor: [
+        "몬스테라",
+        "스투키",
+        "스파티필럼",
+        "금전수",
+        "선인장",
+        "야자",
+        "고무나무",
+        "스킨답서스",
+        "필로덴드론",
+        "알로카시아",
+        "monstera",
+        "dracaena",
+        "ficus",
+        "pothos",
+        "spathiphyllum"
+      ],
+      crop: [
+        "토마토",
+        "방울토마토",
+        "고추",
+        "파프리카",
+        "상추",
+        "배추",
+        "딸기",
+        "감자",
+        "고구마",
+        "오이",
+        "가지",
+        "호박",
+        "수박",
+        "참외",
+        "무",
+        "당근",
+        "양파",
+        "마늘",
+        "lactuca",
+        "solanum",
+        "capsicum",
+        "fragaria"
+      ],
+      ornamental: [
+        "장미",
+        "벚",
+        "개나리",
+        "해바라기",
+        "국화",
+        "튤립",
+        "백합",
+        "수국",
+        "카네이션",
+        "제라늄",
+        "베고니아",
+        "rose",
+        "rosa",
+        "forsythia",
+        "helianthus",
+        "hydrangea"
+      ]
+    };
+    const keywords = keywordMap[category];
     return plants.filter((plant) => keywords.some((keyword) => plantSearchText(plant).includes(keyword.toLowerCase())));
+  }
+
+  function bindDashboardCategoryChips(doc: Document, plants: Plant[]) {
+    const plantSection = Array.from(doc.querySelectorAll("section")).find((section) =>
+      normalizedText(section.querySelector("h2")).includes("내 식물")
+    ) as HTMLElement | undefined;
+    const heading = plantSection?.querySelector("h2");
+    const headerRow = heading?.parentElement as HTMLElement | null;
+    if (!headerRow || headerRow.querySelector("[data-dashboard-category-chips]")) return;
+
+    const chips = doc.createElement("div");
+    chips.dataset.dashboardCategoryChips = "true";
+    chips.className = "flex items-center gap-2 flex-wrap";
+    const categories: { key: DashboardPlantCategory; label: string }[] = [
+      { key: "all", label: "전체" },
+      { key: "indoor", label: "실내식물" },
+      { key: "crop", label: "작물" },
+      { key: "ornamental", label: "화훼" }
+    ];
+    chips.innerHTML = categories
+      .map(
+        (category, index) =>
+          `<button class="px-3 py-1.5 rounded-full text-label-sm font-bold border transition-colors ${
+            index === 0 ? "bg-primary text-white border-primary" : "bg-white text-on-surface-variant border-outline-variant/30 hover:bg-growth-light"
+          }" data-dashboard-category="${category.key}">${category.label}</button>`
+      )
+      .join("");
+    headerRow.appendChild(chips);
+
+    chips.querySelectorAll("button[data-dashboard-category]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        const category = ((button as HTMLElement).dataset.dashboardCategory || "all") as DashboardPlantCategory;
+        chips.querySelectorAll("button").forEach((item) => {
+          item.classList.remove("bg-primary", "text-white", "border-primary");
+          item.classList.add("bg-white", "text-on-surface-variant", "border-outline-variant/30");
+        });
+        button.classList.add("bg-primary", "text-white", "border-primary");
+        button.classList.remove("bg-white", "text-on-surface-variant", "border-outline-variant/30");
+        renderDashboardPlants(doc, filterPlantsByCategory(plants, category));
+      });
+    });
   }
 
   function setSidebarActive(items: HTMLElement[], activeItem: HTMLElement) {
@@ -499,28 +645,35 @@ function App() {
 
   function bindDashboardSidebar(doc: Document, plants: Plant[]) {
     const items = Array.from(doc.querySelectorAll("aside .space-y-1 > div")) as HTMLElement[];
-    const succulentCount = filterPlantsByCategory(plants, "succulent").length;
-    const foliageCount = filterPlantsByCategory(plants, "foliage").length;
+    const sidebarConfig: { label: string; icon: string; category: DashboardPlantCategory | "chat"; count?: number }[] = [
+      { label: "내 식물", icon: "potted_plant", category: "indoor", count: filterPlantsByCategory(plants, "indoor").length },
+      { label: "내 작물", icon: "agriculture", category: "crop", count: filterPlantsByCategory(plants, "crop").length },
+      { label: "화훼", icon: "local_florist", category: "ornamental", count: filterPlantsByCategory(plants, "ornamental").length },
+      { label: "최근 상담", icon: "forum", category: "chat" }
+    ];
 
-    items.forEach((item) => {
-      const text = normalizedText(item);
-      const badge = item.querySelector(".ml-auto");
-      if (text.includes("다육")) badge && (badge.textContent = String(succulentCount));
-      if (text.includes("관엽")) badge && (badge.textContent = String(foliageCount));
-
+    items.forEach((item, index) => {
+      const config = sidebarConfig[index];
+      if (config) {
+        const icon = item.querySelector(".material-symbols-outlined");
+        const label = Array.from(item.querySelectorAll("span")).find((span) => !span.classList.contains("material-symbols-outlined") && !span.classList.contains("ml-auto"));
+        const badge = item.querySelector(".ml-auto");
+        if (icon) icon.textContent = config.icon;
+        if (label) label.textContent = config.label;
+        if (badge && typeof config.count === "number") badge.textContent = String(config.count);
+        if (badge && typeof config.count !== "number") badge.textContent = "";
+        item.dataset.dashboardSidebar = String(config.category);
+      }
       item.addEventListener("click", (event) => {
         event.preventDefault();
         setSidebarActive(items, item);
-        if (text.includes("다육")) {
-          renderDashboardPlants(doc, filterPlantsByCategory(dashboardPlantsRef.current, "succulent"));
-          return;
-        }
-        if (text.includes("관엽")) {
-          renderDashboardPlants(doc, filterPlantsByCategory(dashboardPlantsRef.current, "foliage"));
-          return;
-        }
-        if (text.includes("최근 진단")) {
+        const category = (item.dataset.dashboardSidebar || "all") as DashboardPlantCategory | "chat";
+        if (category === "chat") {
           navigate("chat");
+          return;
+        }
+        if (category !== "all") {
+          renderDashboardPlants(doc, filterPlantsByCategory(dashboardPlantsRef.current, category));
           return;
         }
         renderDashboardPlants(doc, dashboardPlantsRef.current);
@@ -543,20 +696,14 @@ function App() {
       (input as HTMLInputElement).placeholder.includes("검색")
     ) as HTMLInputElement | undefined;
     if (!searchInput) return;
-
-    if (page === "dashboard") {
-      searchInput.addEventListener("input", () => {
-        renderDashboardPlants(doc, filterPlantsByQuery(dashboardPlantsRef.current, searchInput.value));
-      });
-      return;
-    }
+    searchInput.placeholder = "공식 문서 검색...";
 
     const parent = searchInput.parentElement as HTMLElement | null;
     if (!parent) return;
     parent.style.position = "relative";
     const dropdown = doc.createElement("div");
     dropdown.className =
-      "absolute top-full left-0 right-0 mt-2 z-50 bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-lg overflow-hidden hidden";
+      "absolute top-full left-0 right-0 mt-2 z-50 bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-lg overflow-hidden hidden min-w-[360px]";
     dropdown.dataset.searchResults = "true";
     parent.appendChild(dropdown);
 
@@ -571,34 +718,91 @@ function App() {
           return;
         }
         try {
-          const results = await searchPlantCatalog(query, 5);
+          const results = await searchRagDocuments(query, 5);
           dropdown.innerHTML = results.length
             ? results
                 .map(
-                  (item) => `<button class="w-full text-left px-4 py-3 hover:bg-growth-light transition-colors" data-species="${escapeHtml(
-                    item.species
-                  )}" data-name="${escapeHtml(item.name)}">
-                    <span class="block text-label-md font-bold text-on-surface">${escapeHtml(item.name)}</span>
-                    <span class="block text-label-sm text-on-surface-variant">${escapeHtml(item.species)}</span>
+                  (item) => `<button class="w-full text-left px-4 py-3 hover:bg-growth-light transition-colors" data-query="${escapeHtml(query)}">
+                    <span class="block text-label-md font-bold text-on-surface">${escapeHtml(item.title)}</span>
+                    <span class="block text-[11px] text-primary font-bold mt-0.5">${escapeHtml(item.publisher || "공식 문서")}</span>
+                    <span class="block text-label-sm text-on-surface-variant mt-1 line-clamp-2">${escapeHtml(item.excerpt)}</span>
                   </button>`
                 )
                 .join("")
-            : `<div class="px-4 py-3 text-label-sm text-on-surface-variant">검색 결과가 없습니다.</div>`;
+            : `<div class="px-4 py-3 text-label-sm text-on-surface-variant">공식 문서 검색 결과가 없습니다.</div>`;
           dropdown.classList.toggle("hidden", false);
-          dropdown.querySelectorAll("button[data-species]").forEach((button) => {
+          dropdown.querySelectorAll("button[data-query]").forEach((button) => {
             button.addEventListener("click", (event) => {
               event.preventDefault();
-              const target = button as HTMLElement;
-              selectedSpeciesRef.current = target.dataset.species ?? "";
-              searchInput.value = `${target.dataset.name ?? ""} ${target.dataset.species ?? ""}`.trim();
+              const selectedQuery = (button as HTMLElement).dataset.query || query;
+              searchInput.value = selectedQuery;
               dropdown.classList.add("hidden");
-              if (page !== "add") navigate("add");
+              if (page === "chat") {
+                const textarea = doc.querySelector("textarea") as HTMLTextAreaElement | null;
+                if (textarea) {
+                  textarea.value = `${selectedQuery}에 대해 공식 문서 기준으로 알려줘`;
+                  textarea.focus();
+                }
+              } else {
+                localStorage.setItem(PENDING_DIAGNOSIS_QUESTION_KEY, `${selectedQuery}에 대해 공식 문서 기준으로 알려줘`);
+                navigate("chat");
+              }
             });
           });
         } catch (error) {
           console.warn("[Farmhani] top search failed", error);
         }
       }, 250);
+    });
+  }
+
+  function bindLogoHome(doc: Document) {
+    const logo = Array.from(doc.querySelectorAll("header .flex.items-center.gap-2")).find((element) =>
+      normalizedText(element).includes("Farm")
+    ) as HTMLElement | undefined;
+    if (!logo) return;
+    logo.style.cursor = "pointer";
+    logo.addEventListener("click", (event) => {
+      event.preventDefault();
+      navigate("dashboard");
+    });
+  }
+
+  function bindDetailSidebar(doc: Document) {
+    const items = Array.from(doc.querySelectorAll("aside nav > div")) as HTMLElement[];
+    items.forEach((item) => {
+      const text = normalizedText(item);
+      item.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (text.includes("홈")) {
+          navigate("dashboard");
+          return;
+        }
+        if (text.includes("다육") || text.includes("식물")) {
+          localStorage.setItem("farmhani_dashboard_filter", "indoor");
+          navigate("dashboard");
+          return;
+        }
+        if (text.includes("작물") || text.includes("텃밭")) {
+          localStorage.setItem("farmhani_dashboard_filter", "crop");
+          navigate("dashboard");
+          return;
+        }
+        if (text.includes("이파리") || text.includes("대엽") || text.includes("관엽") || text.includes("고사리") || text.includes("화훼") || text.includes("꽃")) {
+          localStorage.setItem("farmhani_dashboard_filter", "ornamental");
+          navigate("dashboard");
+          return;
+        }
+        if (text.includes("최근")) {
+          navigate("chat");
+        }
+      });
+    });
+
+    const addCategory = Array.from(doc.querySelectorAll("aside button")).find((button) => normalizedText(button).includes("카테고리"));
+    addCategory?.addEventListener("click", (event) => {
+      event.preventDefault();
+      frameAlert(doc, "카테고리는 내 식물 목록 필터로 연결됩니다. 새 분류 저장은 다음 단계에서 계정 설정과 함께 확장합니다.");
     });
   }
 
@@ -613,7 +817,10 @@ function App() {
       const plants = await getPlants();
       dashboardPlantsRef.current = plants;
       if (plants[0]?.id && !getSelectedPlantId()) setSelectedPlantId(plants[0].id);
-      renderDashboardPlants(doc, plants);
+      const pendingFilter = localStorage.getItem("farmhani_dashboard_filter") as DashboardPlantCategory | null;
+      localStorage.removeItem("farmhani_dashboard_filter");
+      renderDashboardPlants(doc, pendingFilter ? filterPlantsByCategory(plants, pendingFilter) : plants);
+      bindDashboardCategoryChips(doc, plants);
       bindDashboardSidebar(doc, plants);
     } catch (error) {
       if (!handleApiError(doc, error)) frameAlert(doc, `식물 목록을 불러오지 못했습니다. ${error instanceof Error ? error.message : ""}`);
@@ -636,6 +843,67 @@ function App() {
       </div>`
     );
     messages.scrollTop = messages.scrollHeight;
+  }
+
+  function setChatAttachmentStatus(doc: Document, file?: File | null) {
+    const textarea = doc.querySelector("textarea") as HTMLTextAreaElement | null;
+    const inputBar = textarea?.closest(".relative") as HTMLElement | null;
+    if (!inputBar) return;
+    inputBar.querySelector("[data-chat-attachment]")?.remove();
+    if (!file) return;
+    const badge = doc.createElement("div");
+    badge.dataset.chatAttachment = "true";
+    badge.className =
+      "absolute left-3 -top-10 right-3 bg-growth-light text-primary rounded-xl px-3 py-2 text-label-sm font-bold flex items-center justify-between shadow-sm border border-primary/10";
+    badge.innerHTML = `<span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">image</span>${escapeHtml(
+      file.name
+    )}</span><button type="button" class="text-on-surface-variant hover:text-primary" data-clear-attachment="true">×</button>`;
+    inputBar.appendChild(badge);
+    badge.querySelector("[data-clear-attachment]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      pendingChatPhotoRef.current = null;
+      pendingChatPhotoNoteRef.current = "";
+      badge.remove();
+    });
+  }
+
+  function showTextInputModal(
+    doc: Document,
+    options: { title: string; description: string; placeholder: string; submitLabel: string },
+    onSubmit: (value: string) => void
+  ) {
+    doc.querySelector("[data-app-modal]")?.remove();
+    const overlay = doc.createElement("div");
+    overlay.dataset.appModal = "true";
+    overlay.className = "fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4";
+    overlay.innerHTML = `<div class="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/20 p-6 space-y-5">
+      <div>
+        <p class="text-label-sm font-bold text-primary uppercase tracking-wide">Farm하니 기록</p>
+        <h3 class="text-headline-md font-bold text-on-surface mt-1">${escapeHtml(options.title)}</h3>
+        <p class="text-body-md text-on-surface-variant mt-2">${escapeHtml(options.description)}</p>
+      </div>
+      <textarea class="w-full min-h-32 rounded-xl bg-surface-container border border-outline-variant/20 focus:ring-2 focus:ring-primary p-4 text-body-md resize-none" placeholder="${escapeHtml(options.placeholder)}"></textarea>
+      <div class="flex justify-end gap-2">
+        <button class="px-4 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container" data-modal-cancel="true">취소</button>
+        <button class="px-5 py-2 rounded-lg bg-primary text-white font-bold shadow-sm" data-modal-submit="true">${escapeHtml(options.submitLabel)}</button>
+      </div>
+    </div>`;
+    doc.body.appendChild(overlay);
+    const textarea = overlay.querySelector("textarea") as HTMLTextAreaElement | null;
+    textarea?.focus();
+    overlay.querySelector("[data-modal-cancel]")?.addEventListener("click", () => overlay.remove());
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) overlay.remove();
+    });
+    overlay.querySelector("[data-modal-submit]")?.addEventListener("click", () => {
+      const value = textarea?.value.trim() || "";
+      if (!value) {
+        textarea?.focus();
+        return;
+      }
+      overlay.remove();
+      onSubmit(value);
+    });
   }
 
   function appendAssistantLoading(doc: Document) {
@@ -663,9 +931,9 @@ function App() {
       .join("");
     const actions = answer.todayActions
       .map(
-        (item) => `<div class="flex gap-3 rounded-xl bg-growth-light/40 p-3">
-          <span class="material-symbols-outlined text-primary text-[18px] mt-0.5">check_circle</span>
-          <p class="text-body-md text-on-surface">${escapeHtml(item)}</p>
+        (item, index) => `<div class="flex gap-3 rounded-xl bg-primary-container/80 text-on-primary-container p-4 shadow-sm">
+          <span class="inline-flex w-7 h-7 rounded-full bg-white/30 items-center justify-center text-label-sm font-bold flex-shrink-0">${index + 1}</span>
+          <p class="text-body-md font-medium">${escapeHtml(item)}</p>
         </div>`
       )
       .join("");
@@ -685,16 +953,18 @@ function App() {
         <span class="material-symbols-outlined text-primary text-[18px]">nature</span>
       </div>
       <div class="bg-surface-container-lowest border border-outline-variant/30 p-5 rounded-2xl rounded-tl-none shadow-sm space-y-5">
-        <div class="space-y-2">
-          <p class="text-label-sm font-bold text-primary flex items-center gap-2">
-            <span class="material-symbols-outlined text-[16px]">auto_awesome</span>지금 보기에는
+        <div class="space-y-2 border-b border-outline-variant/20 pb-4">
+          <p class="text-label-sm font-bold text-primary flex items-center gap-2 uppercase tracking-wide">
+            <span class="material-symbols-outlined text-[16px]">auto_awesome</span>관찰 요약
           </p>
           <p class="text-body-md text-on-surface leading-relaxed">${escapeHtml(answer.summary)}</p>
         </div>
         ${
           actions
-            ? `<div class="space-y-2">
-                <p class="text-label-md font-bold text-on-surface">오늘 바로 해볼 것</p>
+            ? `<div class="space-y-3">
+                <p class="text-label-lg font-bold text-primary flex items-center gap-2">
+                  <span class="material-symbols-outlined text-[18px]">task_alt</span>오늘의 할 일
+                </p>
                 <div class="space-y-2">${actions}</div>
               </div>`
             : ""
@@ -716,7 +986,7 @@ function App() {
             : ""
         }
         ${citations ? `<div class="flex flex-wrap gap-2 pt-2">${citations}</div>` : ""}
-        ${answer.safetyNotice ? `<p class="text-[11px] text-outline">${escapeHtml(answer.safetyNotice)}</p>` : ""}
+        ${answer.safetyNotice ? `<p class="text-[11px] text-outline border-t border-outline-variant/20 pt-3">${escapeHtml(answer.safetyNotice)}</p>` : ""}
       </div>
     </div>
     <span class="text-label-sm text-outline ml-11">방금</span>`;
@@ -727,13 +997,22 @@ function App() {
 
   function renderReferences(doc: Document, citations: PlantCareChatResponse["citations"]) {
     const pane = doc.getElementById("reference-pane");
-    if (!pane || citations.length === 0) return;
+    if (!pane) return;
+    if (citations.length === 0) {
+      pane.innerHTML = `<article class="bg-white p-5 rounded-lg shadow-sm border border-outline-variant/10">
+        <span class="text-[10px] font-bold text-primary bg-primary-fixed px-2 py-0.5 rounded uppercase tracking-tighter">공식 문서</span>
+        <h4 class="font-headline-sm text-on-surface mt-3 mb-2">이번 검색에서 표시할 출처가 없습니다.</h4>
+        <p class="text-body-md text-on-surface-variant">질문을 조금 더 구체적으로 입력하면 관련 공식 문서를 다시 검색합니다.</p>
+      </article>`;
+      return;
+    }
 
     pane.innerHTML = citations
       .map((item, index) => {
         const title = escapeHtml(item.title || `참조 ${index + 1}`);
         const publisher = escapeHtml(item.publisher || "공식 자료");
-        const sourceId = escapeHtml(item.sourceId || "");
+        const excerpt = escapeHtml(item.excerpt || "이 출처는 현재 제목과 기관 정보만 확인됩니다. 관련 본문 발췌는 문서 본문이 함께 적재된 자료부터 표시됩니다.");
+        const section = item.section ? `<p class="text-label-sm text-on-surface-variant mt-1">문서 위치: ${escapeHtml(item.section)}</p>` : "";
         const link = item.url
           ? `<a class="text-label-sm text-primary hover:underline" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">원문 보기</a>`
           : "";
@@ -743,11 +1022,58 @@ function App() {
             <span class="text-label-sm text-outline italic">${publisher}</span>
           </div>
           <h4 class="font-headline-sm text-on-surface mb-2">${title}</h4>
-          <p class="text-body-md text-on-surface-variant break-all">${sourceId}</p>
+          ${section}
+          <p class="text-body-md text-on-surface-variant mt-3 leading-relaxed">"${excerpt}"</p>
           <div class="mt-4 pt-4 border-t border-outline-variant/10">${link}</div>
         </article>`;
       })
       .join("");
+  }
+
+  function initializeChatCanvas(doc: Document) {
+    const messages = doc.getElementById("chat-messages");
+    if (messages) {
+      messages.innerHTML = `<div class="flex flex-col items-start gap-2 animate-fade-in">
+        <div class="flex items-start gap-3 max-w-[85%]">
+          <div class="w-8 h-8 rounded-full bg-sage-accent flex-shrink-0 flex items-center justify-center">
+            <span class="material-symbols-outlined text-primary text-[18px]">nature</span>
+          </div>
+          <div class="bg-surface-container-lowest border border-outline-variant/30 p-5 rounded-2xl rounded-tl-none shadow-sm space-y-2">
+            <p class="text-body-md text-on-surface">식물 상태, 물주기, 빛, 흙 상태를 물어보세요. 사진을 첨부하면 사진에서 보이는 증상도 함께 참고합니다.</p>
+            <p class="text-label-sm text-on-surface-variant">확정 진단보다는 관찰 가능한 가능성과 오늘 할 일을 중심으로 안내합니다.</p>
+          </div>
+        </div>
+      </div>`;
+    }
+    const pane = doc.getElementById("reference-pane");
+    if (pane) {
+      pane.innerHTML = `<article class="bg-white p-5 rounded-lg shadow-sm border border-outline-variant/10">
+        <span class="text-[10px] font-bold text-primary bg-primary-fixed px-2 py-0.5 rounded uppercase tracking-tighter">공식 문서</span>
+        <h4 class="font-headline-sm text-on-surface mt-3 mb-2">아직 인용된 문서가 없습니다.</h4>
+        <p class="text-body-md text-on-surface-variant">상담을 시작하면 검색된 공식 문서의 제목, 기관, 관련 발췌문이 이곳에 표시됩니다.</p>
+      </article>`;
+    }
+  }
+
+  function parseStoredAssistantMessage(message: ChatMessage): PlantCareChatResponse | null {
+    const summaryMatch = message.content.match(/\[요약\]\s*([\s\S]*?)(?:\n\n\[의심 원인\]|\n\n\[오늘 할 일\]|$)/);
+    const causesMatch = message.content.match(/\[의심 원인\]\s*([\s\S]*?)(?:\n\n\[오늘 할 일\]|$)/);
+    const actionsMatch = message.content.match(/\[오늘 할 일\]\s*([\s\S]*)$/);
+    if (!summaryMatch && !causesMatch && !actionsMatch) return null;
+
+    const splitLines = (value?: string) =>
+      (value || "")
+        .split(/\n+/)
+        .map((line) => line.replace(/^[-•\d. ]+/, "").trim())
+        .filter(Boolean);
+
+    return {
+      summary: summaryMatch?.[1]?.trim() || message.content,
+      possibleCauses: splitLines(causesMatch?.[1]),
+      todayActions: splitLines(actionsMatch?.[1]),
+      observationChecklist: [],
+      citations: message.citations || []
+    };
   }
 
   function renderHistoryMessage(doc: Document, message: ChatMessage) {
@@ -759,6 +1085,15 @@ function App() {
     const messages = doc.getElementById("chat-messages");
     if (!messages) return;
     const citations = message.citations || [];
+    const parsed = parseStoredAssistantMessage(message);
+    if (parsed) {
+      const wrapper = doc.createElement("div");
+      wrapper.className = "flex flex-col items-start gap-2 animate-fade-in";
+      messages.appendChild(wrapper);
+      renderAssistantAnswer(doc, wrapper, parsed);
+      renderReferences(doc, citations);
+      return;
+    }
     messages.insertAdjacentHTML(
       "beforeend",
       `<div class="flex flex-col items-start gap-2 animate-fade-in">
@@ -772,7 +1107,7 @@ function App() {
         </div>
       </div>`
     );
-    if (citations.length) renderReferences(doc, citations);
+    renderReferences(doc, citations);
   }
 
   async function loadChatMessages(doc: Document, sessionId: string) {
@@ -780,30 +1115,45 @@ function App() {
       const messages = await listChatMessages(sessionId);
       const container = doc.getElementById("chat-messages");
       if (container) container.innerHTML = "";
+      renderReferences(doc, []);
       messages.forEach((message) => renderHistoryMessage(doc, message));
+      forceNewChatSessionRef.current = false;
       localStorage.setItem(LAST_SESSION_ID_KEY, sessionId);
     } catch (error) {
       if (!handleApiError(doc, error)) frameAlert(doc, "대화 내역을 불러오지 못했습니다.");
     }
   }
 
-  async function renderChatSessions(doc: Document) {
+  async function renderChatSessions(doc: Document, options: { autoLoadLast?: boolean } = {}) {
     if (hasSupabaseAuthConfig() && !hasAuthSession()) return;
     const container = doc.querySelector("aside .space-y-1.mb-8") as HTMLElement | null;
     if (!container) return;
 
     try {
-      const sessions = await listChatSessions();
+      const plantId = getSelectedPlantId() || undefined;
+      const sessions = await listChatSessions(plantId);
       container.innerHTML = `<div class="flex items-center gap-3 p-3 mb-1 cursor-pointer hover:bg-growth-light dark:hover:bg-tertiary-container rounded-lg transition-all duration-200 text-on-surface-variant" data-chat-home="true">
         <span class="material-symbols-outlined">home</span>
         <span class="font-label-md">홈 개요</span>
       </div>
-      <div class="mt-4 mb-2 px-3">
-        <span class="text-label-sm uppercase tracking-wider font-bold text-outline">진단 목록</span>
+      <div class="flex items-center gap-3 p-3 mb-3 cursor-pointer bg-primary text-white rounded-lg shadow-sm hover:shadow-md transition-all" data-new-chat="true">
+        <span class="material-symbols-outlined">add_comment</span>
+        <span class="font-label-md">새 채팅</span>
       </div>
-      ${sessions.map((session, index) => chatSessionItemHtml(session, index)).join("")}`;
+      <div class="mt-4 mb-2 px-3">
+        <span class="text-label-sm uppercase tracking-wider font-bold text-outline">이 식물의 상담</span>
+      </div>
+      ${sessions.length ? sessions.map((session, index) => chatSessionItemHtml(session, index)).join("") : `<p class="px-3 py-2 text-label-sm text-on-surface-variant">아직 상담 내역이 없습니다.</p>`}`;
 
       container.querySelector("[data-chat-home]")?.addEventListener("click", () => navigate("dashboard"));
+      container.querySelector("[data-new-chat]")?.addEventListener("click", () => {
+        forceNewChatSessionRef.current = true;
+        localStorage.removeItem(LAST_SESSION_ID_KEY);
+        pendingChatPhotoRef.current = null;
+        pendingChatPhotoNoteRef.current = "";
+        initializeChatCanvas(doc);
+        setChatAttachmentStatus(doc, null);
+      });
       container.querySelectorAll("[data-chat-session]").forEach((item) => {
         item.addEventListener("click", () => {
           const sessionId = (item as HTMLElement).dataset.chatSession;
@@ -812,7 +1162,7 @@ function App() {
       });
 
       const lastSession = localStorage.getItem(LAST_SESSION_ID_KEY);
-      if (lastSession && sessions.some((session) => session.id === lastSession)) {
+      if (options.autoLoadLast && lastSession && sessions.some((session) => session.id === lastSession)) {
         void loadChatMessages(doc, lastSession);
       }
     } catch (error) {
@@ -841,8 +1191,13 @@ function App() {
     input.addEventListener("change", () => {
       pendingChatPhotoRef.current = input.files?.[0] ?? null;
       if (pendingChatPhotoRef.current) {
-        pendingChatPhotoNoteRef.current =
-          doc.defaultView?.prompt("사진 메모를 입력해 주세요. 예: 아래 잎 노란 반점, 흙이 젖어 있음") ?? "";
+        pendingChatPhotoNoteRef.current = "";
+        setChatAttachmentStatus(doc, pendingChatPhotoRef.current);
+        const textarea = doc.querySelector("textarea") as HTMLTextAreaElement | null;
+        if (textarea && !textarea.value.trim()) {
+          textarea.value = "첨부한 사진을 기준으로 현재 식물 상태를 봐줘";
+          textarea.focus();
+        }
       }
     });
   }
@@ -871,21 +1226,20 @@ function App() {
       const loading = appendAssistantLoading(doc);
       try {
         const plantId = await resolvePlantId(doc);
-        let photoId = localStorage.getItem(LAST_PHOTO_ID_KEY) || undefined;
+        let photoId: string | undefined;
+        const newSession = forceNewChatSessionRef.current || !localStorage.getItem(LAST_SESSION_ID_KEY);
 
         if (file) {
           const photo = await uploadPlantPhoto(plantId, file, pendingChatPhotoNoteRef.current || question);
           photoId = photo.id;
-          localStorage.setItem(LAST_PHOTO_ID_KEY, photo.id);
-          pendingChatPhotoRef.current = null;
-          pendingChatPhotoNoteRef.current = "";
         }
 
-        const answer = await askPlantCare(question, plantId, { photoId });
+        const answer = await askPlantCare(question, plantId, { photoId, newSession });
+        forceNewChatSessionRef.current = false;
         setLastSessionId(answer.sessionId);
         if (loading) renderAssistantAnswer(doc, loading, answer);
         renderReferences(doc, answer.citations);
-        void renderChatSessions(doc);
+        void renderChatSessions(doc, { autoLoadLast: false });
       } catch (error) {
         if (handleApiError(doc, error)) return;
         if (loading) {
@@ -893,6 +1247,10 @@ function App() {
             상담 요청 중 오류가 발생했습니다. ${escapeHtml(error instanceof Error ? error.message : "")}
           </div>`;
         }
+      } finally {
+        pendingChatPhotoRef.current = null;
+        pendingChatPhotoNoteRef.current = "";
+        setChatAttachmentStatus(doc, null);
       }
     }
 
@@ -948,10 +1306,10 @@ function App() {
     input.addEventListener("change", () => {
       pendingChatPhotoRef.current = input.files?.[0] ?? null;
       if (pendingChatPhotoRef.current) {
-        pendingChatPhotoNoteRef.current = doc.defaultView?.prompt("사진 메모를 입력해 주세요.") ?? "";
+        pendingChatPhotoNoteRef.current = "";
         localStorage.setItem(
           PENDING_DIAGNOSIS_QUESTION_KEY,
-          pendingChatPhotoNoteRef.current || "첨부한 사진을 기준으로 현재 식물 상태를 진단해 주세요."
+          "첨부한 사진을 기준으로 현재 식물 상태를 진단해 주세요."
         );
         localStorage.removeItem(LAST_SESSION_ID_KEY);
         navigate("chat");
@@ -1061,6 +1419,7 @@ function App() {
       if (text.includes("물주기 기록")) {
         button.addEventListener("click", async (event) => {
           event.preventDefault();
+          event.stopImmediatePropagation();
           const plantId = getSelectedPlantId();
           if (!plantId) return;
           try {
@@ -1079,6 +1438,7 @@ function App() {
       if (text.includes("새 일지 작성")) {
         button.addEventListener("click", (event) => {
           event.preventDefault();
+          event.stopImmediatePropagation();
           const input = createHiddenFileInput(doc);
           input.click();
           input.addEventListener("change", async () => {
@@ -1088,10 +1448,42 @@ function App() {
             try {
               await uploadPlantPhoto(plantId, file, "성장 일지 사진");
               frameAlert(doc, "성장 일지 사진을 저장했습니다.");
+              bindDetailData(doc);
             } catch (error) {
               if (!handleApiError(doc, error)) frameAlert(doc, "사진 저장에 실패했습니다.");
             }
           });
+        });
+      }
+      if (text === "edit") {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const plantId = getSelectedPlantId();
+          if (!plantId) return;
+          showTextInputModal(
+            doc,
+            {
+              title: "활력 상태 기록",
+              description: "오늘 보이는 잎, 줄기, 흙 상태를 짧게 남겨두면 다음 상담에서 함께 참고합니다.",
+              placeholder: "예: 새잎은 잘 펴졌고 아래쪽 잎 끝이 조금 마른 상태예요.",
+              submitLabel: "기록 저장"
+            },
+            async (memo) => {
+              try {
+                await createCareLog(plantId, {
+                  wateredAt: undefined,
+                  leafCondition: memo,
+                  soilCondition: "미기록",
+                  memo: "활력 개요 메모"
+                });
+                frameAlert(doc, "활력 기록을 저장했습니다.");
+                bindDetailData(doc);
+              } catch (error) {
+                if (!handleApiError(doc, error)) frameAlert(doc, "활력 기록 저장에 실패했습니다.");
+              }
+            }
+          );
         });
       }
     });
@@ -1104,6 +1496,7 @@ function App() {
       if (target.id === "auth-submit" || target.id === "toggle-auth") return;
       if (page === "add" && target.closest("#form-card")) return;
       if (page === "dashboard" && target.closest("aside")) return;
+      if (page === "detail" && target.closest("aside")) return;
 
       if (text.includes("dark_mode")) {
         element.addEventListener("click", (event) => {
@@ -1179,7 +1572,10 @@ function App() {
 
       if (id === "auth-submit" || id === "toggle-auth") return;
       if (page === "add" && target.closest("#form-card")) return;
+      if (page === "detail" && (text.includes("물주기 기록") || text.includes("새 일지 작성") || text.includes("edit"))) return;
+      if (page === "detail" && target.closest("aside")) return;
       if (target.closest("[data-plant-card]") || target.closest("[data-water-plant]")) return;
+      if (target.closest("button[title='사진 업로드']")) return;
       if (text.includes("카테고리")) return;
 
       if (text.includes("AI 상담") || text.includes("AI 조언") || text.includes("빠른 AI 진단") || label.includes("diagnosis")) {
@@ -1220,9 +1616,14 @@ function App() {
     const frame = frameRef.current;
     const doc = frame?.contentDocument;
     if (!doc) return;
+    if (page !== "chat") {
+      pendingChatPhotoRef.current = null;
+      pendingChatPhotoNoteRef.current = "";
+    }
 
     bindGenericControls(doc);
     bindFrameNavigation(doc);
+    bindLogoHome(doc);
     bindTopSearch(doc);
     if (page === "login") bindAuth(doc);
     if (page === "dashboard") {
@@ -1230,6 +1631,8 @@ function App() {
       bindDashboardUpload(doc);
     }
     if (page === "add") {
+      profilePhotoRef.current = null;
+      selectedSpeciesRef.current = "";
       bindSpeciesAutocomplete(doc);
       bindAddDateShortcuts(doc);
       bindAddPhotoPicker(doc);
@@ -1237,13 +1640,15 @@ function App() {
     }
     if (page === "detail") {
       bindDetailData(doc);
+      bindDetailSidebar(doc);
       bindQuickCareButtons(doc);
     }
     if (page === "chat") {
+      initializeChatCanvas(doc);
       bindChatPhotoPicker(doc);
       bindChatSubmit(doc);
       bindChatQuickPrompts(doc);
-      void renderChatSessions(doc);
+      void renderChatSessions(doc, { autoLoadLast: true });
     }
   }
 

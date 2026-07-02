@@ -2,6 +2,20 @@
   "version": "2026-07-01",
   "sources": [
     {
+      "source_id": "farmhani_priority_plant_seed",
+      "title": "Farmhani MVP priority plant catalog seed",
+      "publisher": "Farmhani data team",
+      "url": "local:data/catalog/priority_plant_catalog.jsonl",
+      "license": "Internal curated seed list; verify external descriptions before public redistribution",
+      "category": "plant_catalog",
+      "priority": 1,
+      "collection_mode": "manual_review",
+      "api_key_env": null,
+      "usage_scope": "plant_catalog",
+      "safety_tags": ["not_diagnosis"],
+      "notes": "검색/자동완성 기본 커버리지를 위한 식물명 seed. 관리법 RAG의 근거 문서가 아니라 이름/분류 카탈로그 용도다."
+    },
+    {
       "source_id": "nongsaro_indoor_catalog",
       "title": "농사로 실내식물 정보",
       "publisher": "농촌진흥청 농사로",

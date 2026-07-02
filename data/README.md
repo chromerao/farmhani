@@ -31,6 +31,24 @@
 python data/scripts/run_pipeline.py --collect-web
 ```
 
+식물명 검색/자동완성용 기본 카탈로그 생성:
+
+```bash
+python data/scripts/run_pipeline.py --build-plant-catalog
+```
+
+Supabase `plant_catalog` 적재:
+
+```bash
+python data/scripts/run_pipeline.py --build-plant-catalog --load-plant-catalog
+```
+
+실내식물/작물 관리 문서 확장 수집:
+
+```bash
+python data/scripts/run_pipeline.py --collect-core-plants
+```
+
 OpenAI embedding과 Supabase 적재까지 진행:
 
 ```bash
@@ -45,6 +63,13 @@ python data/scripts/run_pipeline.py --collect-web --embed --embed-mode openai --
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `PSIS_API_KEY` if PSIS API collection is needed
 - `NCPMS_API_KEY` if approved NCPMS API collection is used
+
+## 추가 수집에 필요한 정보
+
+- 기본 식물명 seed catalog 65종은 추가 API key 없이 생성 가능합니다.
+- 농사로 공개 웹 상세 수집(`--collect-core-plants`)은 현재 추가 API key 없이 실행합니다.
+- 농사로 OpenAPI 기반 작물 전자책/품종/목차 수집까지 확장하려면 `NONGSARO_API_KEY`와 사용할 operation 명세가 필요합니다.
+- 국가표준식물목록/국가생물종 식물도감 API를 붙일 경우 해당 OpenAPI endpoint, 인증키, 이용조건 확인이 필요합니다.
 
 ## 산출물
 

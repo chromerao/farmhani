@@ -4,16 +4,17 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-from common import PROCESSED_DIR, load_source_registry, merge_safety_tags, read_jsonl, slugify, today, write_jsonl
+from common import CATALOG_DIR, PROCESSED_DIR, load_source_registry, merge_safety_tags, read_jsonl, slugify, today, write_jsonl
 
 REQUIRED_FIELDS = ["name_ko", "source_id", "source_url", "license"]
+DEFAULT_INPUT = CATALOG_DIR / "priority_plant_catalog.jsonl"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Normalize reviewed plant/crop records into plant_master.sample.jsonl.")
     parser.add_argument(
         "--input",
-        required=True,
+        default=str(DEFAULT_INPUT),
         help="Manual/reviewed plant records JSONL. Raw crawling should be reviewed before this step.",
     )
     parser.add_argument("--output", default=str(PROCESSED_DIR / "plant_master.sample.jsonl"))
@@ -34,8 +35,10 @@ def normalize_record(row: dict[str, Any], registry: dict[str, dict[str, Any]]) -
         "name_ko": name_ko,
         "name_scientific": row.get("name_scientific", ""),
         "name_en": row.get("name_en", ""),
+        "aliases": row.get("aliases", []),
         "family": row.get("family", ""),
         "category": row.get("category") or [source.get("category", "uncategorized")],
+        "description": row.get("description", ""),
         "light_requirement": row.get("light_requirement", ""),
         "water_requirement": row.get("water_requirement", ""),
         "min_winter_temp_c": row.get("min_winter_temp_c"),

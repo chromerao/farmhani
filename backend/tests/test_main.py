@@ -410,6 +410,35 @@ def test_search_plant_catalog_no_match():
     assert isinstance(data, list)
     assert len(data) == 0
 
+def test_search_rag_documents(monkeypatch):
+    from app.api.v1 import rag as rag_api
+    from app.services.rag.vectorstore import SearchResult
+
+    monkeypatch.setattr(
+        rag_api,
+        "search_documents",
+        lambda q, top_k=5: [
+            SearchResult(
+                content="과습일 때는 흙 표면뿐 아니라 속흙이 충분히 마른 뒤 물을 주는 것이 좋습니다.",
+                metadata={
+                    "source_id": "RAG-DOC-001",
+                    "title": "실내 식물 물관리",
+                    "url": "https://example.com",
+                    "publisher": "테스트 기관",
+                },
+                score=0.9,
+            )
+        ],
+    )
+
+    response = client.get("/api/v1/rag/search?q=과습")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+    assert "title" in data[0]
+    assert "excerpt" in data[0]
+
 def test_get_plant_detail_success():
     plant_id = "d3b07384-d113-49c3-a558-1ec114a84d41"
     response = client.get(f"/api/v1/plants/{plant_id}")
@@ -477,3 +506,45 @@ def test_list_chat_messages_success():
     assert len(data[1]["citations"]) == 1
 
 
+def test_image_rag_signals_are_added_to_retrieval_query(monkeypatch):
+    from app.services.rag import pipeline as rag_pipeline
+
+    def fake_analyze_plant_image(db, storage_path, question):
+        return {
+            "signals": ["잎 앞면에 노란 반점 관찰", "사진상 심각도: 경미"],
+            "description": "첨부 사진에서 잎 일부의 노란 반점과 가장자리 마름이 관찰됩니다.",
+            "affectedParts": ["잎"],
+            "severity": "경미",
+        }
+
+    monkeypatch.setattr(rag_pipeline, "analyze_plant_image", fake_analyze_plant_image)
+
+    signal_result = rag_pipeline.extract_image_signals(
+        {
+            "db_client": MockSupabaseClient(),
+            "photo_data": {
+                "id": "e3b07384-d113-49c3-a558-1ec114a84d43",
+                "storage_path": "users/d3b07384/plants/leaf.jpg",
+                "note": "잎 앞면 사진",
+            },
+            "recent_photos": [],
+            "care_logs": [],
+            "question": "사진도 같이 보고 상태를 알려줘",
+        }
+    )
+
+    assert "잎 앞면에 노란 반점 관찰" in signal_result["image_signals"]
+    assert "노란 반점" in signal_result["image_description"]
+
+    query_result = rag_pipeline.build_retrieval_query(
+        {
+            "plant_data": {"name": "몬스테라", "species": "Monstera deliciosa"},
+            "question": "사진도 같이 보고 상태를 알려줘",
+            "image_signals": signal_result["image_signals"],
+            "image_description": signal_result["image_description"],
+            "user_context": "식물 별명: 몬스테라",
+        }
+    )
+
+    assert "사진 분석" in query_result["search_query"]
+    assert "노란 반점" in query_result["search_query"]

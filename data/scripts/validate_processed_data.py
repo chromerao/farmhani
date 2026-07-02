@@ -17,8 +17,18 @@ REQUIRED_CHUNK_FIELDS = [
     "category",
     "symptom_keywords",
     "safety_tags",
+    "section",
+    "excerpt",
     "text",
 ]
+
+
+def meaningful_text_score(text: str) -> float:
+    compact = "".join(char for char in text if not char.isspace())
+    if not compact:
+        return 0.0
+    meaningful = sum(1 for char in compact if char.isalpha() or "\uac00" <= char <= "\ud7a3")
+    return meaningful / len(compact)
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,6 +93,19 @@ def main() -> None:
             errors.append(f"chunk[{index}] pesticide category requires pesticide_caution")
         if not isinstance(chunk.get("symptom_keywords"), list):
             errors.append(f"chunk[{index}] symptom_keywords must be a list")
+        text = str(chunk.get("text") or "")
+        excerpt = str(chunk.get("excerpt") or "")
+        metadata = chunk.get("metadata") if isinstance(chunk.get("metadata"), dict) else {}
+        if len(text) < 80:
+            errors.append(f"chunk[{index}] text is too short for RAG citation display")
+        if meaningful_text_score(text) < 0.45:
+            errors.append(f"chunk[{index}] text looks non-document-like or mostly numeric/symbolic")
+        if excerpt and excerpt not in text and text[:80] not in excerpt:
+            errors.append(f"chunk[{index}] excerpt should be derived from chunk text")
+        if metadata:
+            for field in ["section", "excerpt", "contentPreview"]:
+                if not metadata.get(field):
+                    errors.append(f"chunk[{index}] metadata missing {field}")
 
     for index, chunk in enumerate(embedded, start=1):
         vector = chunk.get("embedding")

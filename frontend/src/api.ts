@@ -245,9 +245,30 @@ export async function searchPlantCatalog(q: string, limit = 6): Promise<PlantCat
       { id: "monstera-deliciosa", name: "몬스테라 델리시오사", species: "Monstera deliciosa", familyName: "천남성과" },
       { id: "ficus-elastica", name: "인도고무나무", species: "Ficus elastica", familyName: "뽕나무과" },
       { id: "sansevieria", name: "스투키", species: "Dracaena angolensis", familyName: "아스파라거스과" },
-      { id: "spathiphyllum", name: "스파티필럼", species: "Spathiphyllum wallisii", familyName: "천남성과" }
+      { id: "spathiphyllum", name: "스파티필럼", species: "Spathiphyllum wallisii", familyName: "천남성과" },
+      { id: "rose", name: "장미", species: "Rosa spp.", familyName: "장미과" },
+      { id: "strawberry", name: "딸기", species: "Fragaria x ananassa", familyName: "장미과" },
+      { id: "potato", name: "감자", species: "Solanum tuberosum", familyName: "가지과" },
+      { id: "sweet-potato", name: "고구마", species: "Ipomoea batatas", familyName: "메꽃과" },
+      { id: "orchid", name: "난", species: "Orchidaceae", familyName: "난초과" }
     ].filter((item) => !term || item.name.toLowerCase().includes(term) || item.species.toLowerCase().includes(term));
   }
+}
+
+export type RagSearchResult = {
+  sourceId: string;
+  title: string;
+  url?: string | null;
+  publisher?: string | null;
+  excerpt: string;
+  score?: number | null;
+};
+
+export async function searchRagDocuments(q: string, limit = 5): Promise<RagSearchResult[]> {
+  const params = new URLSearchParams();
+  if (q.trim()) params.set("q", q.trim());
+  params.set("limit", String(limit));
+  return request<RagSearchResult[]>(`/api/v1/rag/search?${params.toString()}`, { auth: false });
 }
 
 export async function getUploadSignedUrl(file: File): Promise<UploadSignedUrlResponse> {
@@ -323,7 +344,7 @@ export async function uploadPlantPhoto(plantId: string, file: File, note?: strin
 export async function askPlantCare(
   question: string,
   plantId: string,
-  options: { careLogId?: string; photoId?: string } = {}
+  options: { careLogId?: string; photoId?: string; newSession?: boolean } = {}
 ): Promise<PlantCareChatResponse> {
   if (!hasSupabaseAuthConfig()) {
     return mockChatResponse;
@@ -335,13 +356,17 @@ export async function askPlantCare(
       plantId,
       careLogId: options.careLogId,
       photoId: options.photoId,
+      newSession: options.newSession ?? false,
       question
     })
   });
 }
 
-export async function listChatSessions() {
-  return request<ChatSession[]>("/api/v1/chat/sessions");
+export async function listChatSessions(plantId?: string) {
+  const params = new URLSearchParams();
+  if (plantId) params.set("plantId", plantId);
+  const query = params.toString();
+  return request<ChatSession[]>(`/api/v1/chat/sessions${query ? `?${query}` : ""}`);
 }
 
 export async function listChatMessages(sessionId: string) {

@@ -89,6 +89,7 @@ def normalize_doc(row: dict[str, Any], registry: dict[str, dict[str, Any]]) -> d
         "category": category,
         "priority": row.get("priority") or source.get("priority") or 99,
         "usage_scope": row.get("usage_scope") or source.get("usage_scope") or "rag",
+        "section": row.get("section") or row.get("heading") or row.get("sub_title") or "",
         "crop_or_plant": crop_or_plant,
         "symptom_keywords": symptom_keywords,
         "safety_tags": safety_tags,

@@ -1,6 +1,12 @@
 {
   "version": "2026-07-01",
   "categories": {
+    "plant_catalog": {
+      "label_ko": "식물명 검색 카탈로그",
+      "priority": 1,
+      "backend_use": ["plant_catalog", "autocomplete"],
+      "default_safety_tags": ["not_diagnosis"]
+    },
     "indoor_care": {
       "label_ko": "실내식물 기본 관리",
       "priority": 1,
@@ -13,6 +19,20 @@
       "priority": 1,
       "backend_use": ["rag", "plant_catalog"],
       "target_crops": ["토마토", "고추", "상추", "오이", "딸기"],
+      "default_safety_tags": ["not_diagnosis"]
+    },
+    "ornamental_care": {
+      "label_ko": "관상식물/화훼 기본 관리",
+      "priority": 1,
+      "backend_use": ["rag", "plant_catalog"],
+      "target_crops": ["장미", "벚나무", "벚꽃", "개나리", "해바라기", "국화", "튤립", "백합", "수국"],
+      "default_safety_tags": ["not_diagnosis"]
+    },
+    "herb": {
+      "label_ko": "허브/가정재배 식물",
+      "priority": 1,
+      "backend_use": ["rag", "plant_catalog"],
+      "target_crops": ["바질", "로즈마리", "민트", "라벤더"],
       "default_safety_tags": ["not_diagnosis"]
     },
     "crop_growth_stage": {

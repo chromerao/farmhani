@@ -130,6 +130,7 @@ IF NOT EXISTS vector;
       url TEXT,
       publisher TEXT,
       content TEXT,
+      metadata JSONB,
       similarity float
     )
     LANGUAGE plpgsql
@@ -143,6 +144,7 @@ IF NOT EXISTS vector;
         rag_sources.url,
         rag_sources.publisher,
         rag_chunks.text AS content,
+        rag_chunks.metadata,
         1 - (rag_chunks.embedding <=> query_embedding) AS similarity
       FROM public.rag_chunks
       JOIN public.rag_sources ON rag_sources.source_id = rag_chunks.source_id

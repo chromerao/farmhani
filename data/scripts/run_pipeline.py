@@ -13,6 +13,13 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the Farmhani data pipeline end to end.")
     parser.add_argument("--collect-web", action="store_true", help="Fetch public web pages from source registry.")
+    parser.add_argument(
+        "--collect-core-plants",
+        action="store_true",
+        help="Fetch expanded Nongsaro indoor plant/crop care pages for MVP plant coverage.",
+    )
+    parser.add_argument("--build-plant-catalog", action="store_true", help="Build plant_master sample catalog.")
+    parser.add_argument("--load-plant-catalog", action="store_true", help="Load plant_master into Supabase plant_catalog.")
     parser.add_argument("--collect-ncpms-guide", action="store_true", help="Fetch NCPMS OpenAPI guide page.")
     parser.add_argument("--collect-psis", action="store_true", help="Call PSIS API. Requires PSIS_API_KEY.")
     parser.add_argument("--psis-crop", help="Crop name for PSIS collection.")
@@ -36,6 +43,19 @@ def main() -> None:
     if args.collect_web:
         run("collect_web_sources.py")
 
+    if args.collect_core_plants:
+        run(
+            "collect_web_sources.py",
+            "--source-id",
+            "nongsaro_indoor_catalog",
+            "--source-id",
+            "nongsaro_crop_tech",
+            "--max-detail-pages",
+            "250",
+            "--output",
+            "data/interim/web_documents.core_plants.jsonl",
+        )
+
     if args.collect_ncpms_guide:
         run("collect_ncpms.py")
 
@@ -58,6 +78,12 @@ def main() -> None:
     if args.load_supabase:
         load_args = ["--replace"] if args.replace else []
         run("load_supabase_pgvector.py", *load_args)
+
+    if args.build_plant_catalog or args.load_plant_catalog:
+        run("build_plant_master.py")
+
+    if args.load_plant_catalog:
+        run("load_plant_catalog.py")
 
 
 if __name__ == "__main__":

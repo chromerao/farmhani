@@ -55,6 +55,8 @@ export type PlantCareChatResponse = {
     title: string;
     url?: string;
     publisher?: string;
+    excerpt?: string;
+    section?: string;
   }[];
   safetyNotice?: string;
   sessionId?: string;

@@ -103,6 +103,24 @@ python data/scripts/run_pipeline.py --collect-web
 
 이 명령은 공개 웹 출처를 수집하고, 문서 정규화, chunk 생성, 검증까지 실행합니다.
 
+식물/작물 검색 커버리지를 먼저 넓히려면 기본 seed catalog를 생성합니다.
+
+```bash
+python data/scripts/run_pipeline.py --build-plant-catalog
+```
+
+Supabase `plant_catalog`까지 적재하려면 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`를 준비한 뒤 실행합니다.
+
+```bash
+python data/scripts/run_pipeline.py --build-plant-catalog --load-plant-catalog
+```
+
+농사로 실내식물/작목정보 상세 문서를 넓게 수집하려면 다음 옵션을 사용합니다. 이 명령은 API key 없이 공개 웹 상세 페이지를 따라가며, 결과는 `data/interim/web_documents.core_plants.jsonl`에 저장됩니다.
+
+```bash
+python data/scripts/run_pipeline.py --collect-core-plants
+```
+
 ## 단계별 명령
 
 ### 1. 공개 웹 출처 수집
@@ -128,6 +146,12 @@ python data/scripts/collect_web_sources.py --source-id nongsaro_indoor_catalog
 ```bash
 python data/scripts/collect_web_sources.py --source-id nongsaro_indoor_catalog --max-detail-pages 20
 python data/scripts/collect_web_sources.py --source-id nongsaro_crop_tech --max-detail-pages 20
+```
+
+실내식물 전체와 주요 작물 커버리지를 늘릴 때:
+
+```bash
+python data/scripts/collect_web_sources.py --source-id nongsaro_indoor_catalog --source-id nongsaro_crop_tech --max-detail-pages 250 --output data/interim/web_documents.core_plants.jsonl
 ```
 
 상세 수집 없이 목록 페이지만 저장하려면:
@@ -340,6 +364,14 @@ python data/scripts/load_supabase_pgvector.py --dry-run
 ```bash
 python data/scripts/validate_processed_data.py
 ```
+
+식물명 카탈로그 대비 RAG 관리 문서 커버리지 확인:
+
+```bash
+python data/scripts/validate_data_coverage.py
+```
+
+`Only weak/reference matches`는 병해충/AI Hub 라벨 요약처럼 관리 가이드로 보기 약한 문서만 있는 식물입니다. `No RAG matches`는 식물명 카탈로그에는 있지만 RAG 문서가 없는 항목입니다.
 
 아직 산출물이 없을 때 script 자체만 확인:
 

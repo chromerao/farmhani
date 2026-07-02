@@ -51,9 +51,18 @@ def source_payload(row: dict[str, Any]) -> dict[str, Any]:
 def chunk_payload(row: dict[str, Any], include_metadata: bool = False) -> dict[str, Any]:
     metadata = dict(row.get("metadata") or {})
     metadata.setdefault("chunkId", row["chunk_id"])
+    metadata.setdefault("chunkKey", row.get("chunk_key", ""))
+    metadata.setdefault("sourceId", row["source_id"])
+    metadata.setdefault("sourceKey", row.get("source_key", ""))
     metadata.setdefault("title", row["title"])
     metadata.setdefault("url", row.get("url", ""))
     metadata.setdefault("publisher", row.get("publisher", ""))
+    metadata.setdefault("category", row.get("category", ""))
+    metadata.setdefault("section", row.get("section") or row.get("category") or "overview")
+    metadata.setdefault("excerpt", row.get("excerpt") or row.get("text", "")[:260])
+    metadata.setdefault("contentPreview", metadata["excerpt"])
+    metadata.setdefault("cropOrPlant", row.get("crop_or_plant", []))
+    metadata.setdefault("symptomKeywords", row.get("symptom_keywords", []))
     metadata.setdefault("safetyTags", row.get("safety_tags", []))
     payload = {
         "chunk_id": row["chunk_id"],

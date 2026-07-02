@@ -44,6 +44,43 @@ def source_record(doc: dict[str, Any], registry: dict[str, dict[str, Any]]) -> d
     }
 
 
+def excerpt_for_display(text: str, max_chars: int = 260) -> str:
+    content = normalize_text(text)
+    if len(content) <= max_chars:
+        return content
+    end = max(content.rfind(".", 0, max_chars), content.rfind("\n", 0, max_chars))
+    if end < int(max_chars * 0.45):
+        end = max_chars
+    return content[:end].strip().rstrip(".") + "..."
+
+
+def meaningful_text_ratio(text: str) -> float:
+    compact = "".join(char for char in text if not char.isspace())
+    if not compact:
+        return 0.0
+    meaningful = sum(1 for char in compact if char.isalpha() or "\uac00" <= char <= "\ud7a3")
+    return meaningful / len(compact)
+
+
+def should_skip_chunk(text: str) -> bool:
+    content = normalize_text(text)
+    if len(content) < 80:
+        return True
+    return meaningful_text_ratio(content) < 0.45
+
+
+def section_for_chunk(doc: dict[str, Any], index: int) -> str:
+    section = normalize_text(str(doc.get("section") or ""))
+    if section:
+        return section
+    category = normalize_text(str(doc.get("category") or ""))
+    if category:
+        return category
+    if index == 1:
+        return "overview"
+    return f"part-{index:02d}"
+
+
 def chunk_record(doc: dict[str, Any], text: str, index: int) -> dict[str, Any]:
     source_id = doc["source_id"]
     source_key = doc.get("source_key", "")
@@ -60,6 +97,8 @@ def chunk_record(doc: dict[str, Any], text: str, index: int) -> dict[str, Any]:
     symptom_keywords = doc.get("symptom_keywords") or detect_symptom_keywords(content)
     if not symptom_keywords:
         symptom_keywords = [doc.get("category") or "general_reference"]
+    section = section_for_chunk(doc, index)
+    excerpt = excerpt_for_display(content)
     metadata = {
         "chunkId": chunk_id,
         "chunkKey": chunk_key,
@@ -71,6 +110,9 @@ def chunk_record(doc: dict[str, Any], text: str, index: int) -> dict[str, Any]:
         "url": doc.get("url", ""),
         "license": doc.get("license", ""),
         "category": doc.get("category", ""),
+        "section": section,
+        "excerpt": excerpt,
+        "contentPreview": excerpt,
         "cropOrPlant": crop_or_plant,
         "symptomKeywords": symptom_keywords,
         "safetyTags": safety_tags,
@@ -91,6 +133,8 @@ def chunk_record(doc: dict[str, Any], text: str, index: int) -> dict[str, Any]:
         "license": doc.get("license", ""),
         "collected_at": doc.get("collected_at", ""),
         "category": doc.get("category", ""),
+        "section": section,
+        "excerpt": excerpt,
         "priority": doc.get("priority", 99),
         "usage_scope": doc.get("usage_scope", "rag"),
         "crop_or_plant": crop_or_plant,
@@ -124,6 +168,8 @@ def main() -> None:
         max_chars, overlap_chars = chunking_params(doc, args.max_chars, args.overlap_chars)
         parts = chunk_text(doc.get("text", ""), max_chars=max_chars, overlap_chars=overlap_chars)
         for index, part in enumerate(parts, start=1):
+            if should_skip_chunk(part):
+                continue
             chunks.append(chunk_record(doc, part, index))
 
     source_count = write_jsonl(Path(args.sources_output), sources.values())

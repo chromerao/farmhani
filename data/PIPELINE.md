@@ -34,6 +34,9 @@ python data/scripts/collect_aihub_horticulture.py
 |---|---:|---|---|
 | `indoor_care` | 1 | 실내식물 물주기, 광도, 온도, 과습/건조 관리 | 농사로 실내식물 정보 |
 | `crop_care` | 1 | 토마토/고추/상추/오이/딸기 재배관리 | 농사로 작목정보 |
+| `plant_catalog` | 1 | 식물명/작물명 검색, 자동완성, 별칭 | Farmhani seed, 향후 국가식물목록 |
+| `ornamental_care` | 1 | 장미/벚꽃/개나리/해바라기 등 관상식물 | seed catalog, 향후 식물도감 |
+| `herb` | 1 | 바질/로즈마리/민트 등 가정재배 허브 | seed catalog, 향후 농사로/식물도감 |
 | `pest_reference` | 2 | 병해충 증상 참고, 관찰 포인트 | NCPMS |
 | `pesticide_safety` | 3 | 농약 안전사용기준 확인용 참고 | PSIS |
 | `image_reference` | 4 | 이미지 manifest, 향후 비전 모델/증상 taxonomy | AI Hub |
@@ -47,6 +50,7 @@ python data/scripts/collect_aihub_horticulture.py
 |---|---|---|---|
 | `nongsaro_indoor_catalog` | public web fetch | 불필요 | HTML 저장 후 본문 추출, RAG/plant catalog 후보 |
 | `nongsaro_crop_tech` | public web fetch | 불필요 | 작목별 관리 문서 추출 |
+| `farmhani_priority_plant_seed` | local reviewed JSONL | 불필요 | 식물 등록/자동완성 기본 카탈로그 |
 | `ncpms_openapi_guide` | public web fetch | 조사용 | OpenAPI 안내와 승인 절차 문서화 |
 | `ncpms_pest_reference` | API 또는 manual JSONL | `NCPMS_API_KEY` | 승인 전에는 수동 조사 JSONL을 같은 schema로 정규화 |
 | `psis_pesticide_safety` | OpenAPI | `PSIS_API_KEY` | 안전사용기준 참고용으로만 저장 |
@@ -171,6 +175,27 @@ python data/scripts/chunk_documents.py
 
 `rag_chunks.sample.jsonl`은 Backend가 직접 읽는 `rag_chunks.text`, `rag_chunks.symptom_keywords` 컬럼에 맞춰 생성됩니다. `source_id`와 `chunk_id`는 UUID 문자열이며, 사람이 읽는 기존 출처 키는 `source_key`, `chunk_key`에 남깁니다.
 
+### 4.3.1 식물 검색 카탈로그
+
+RAG 답변용 문서와 별도로 식물 등록/검색/자동완성용 `plant_catalog`를 생성합니다. 기본 seed는 `data/catalog/priority_plant_catalog.jsonl`이며, 딸기/고구마/장미/벚꽃/개나리/해바라기처럼 일반 사용자가 자주 찾는 식물과 작물을 우선 포함합니다.
+
+```bash
+python data/scripts/build_plant_master.py
+python data/scripts/load_plant_catalog.py --dry-run
+```
+
+Supabase 적재:
+
+```bash
+python data/scripts/load_plant_catalog.py
+```
+
+전체 파이프라인 옵션:
+
+```bash
+python data/scripts/run_pipeline.py --build-plant-catalog --load-plant-catalog
+```
+
 ### 4.4 임베딩
 
 실제 적재 전에는 OpenAI embedding을 사용합니다.
@@ -203,6 +228,28 @@ python data/scripts/load_supabase_pgvector.py --replace
 |---|---|---|
 | `rag_sources.sample.jsonl` | `rag_sources` | `source_id`, `title`, `url`, `publisher`, `collected_at` |
 | `rag_chunks.embedded.jsonl` | `rag_chunks` | `chunk_id`, `source_id`, `text`, `embedding`, `symptom_keywords` |
+
+### 4.6 재적재 전 품질 기준
+
+기존 Supabase RAG 데이터를 삭제하고 다시 적재하기 전에는 현재 스크립트로 chunk를 재생성하고 검증을 통과시킵니다.
+
+출처/공식 문서 패널 표시를 위해 다음 필드는 필수입니다.
+
+- `rag_chunks.text`: Backend가 `content`로 받아 답변과 발췌문 생성에 쓰는 본문입니다.
+- `rag_chunks.metadata.section`: citation에 표시할 문서 위치/섹션입니다.
+- `rag_chunks.metadata.excerpt`: 공식 문서 패널에 표시할 짧은 발췌문입니다.
+- `rag_chunks.metadata.contentPreview`: UI 호환용 발췌문입니다.
+- `rag_chunks.symptom_keywords`: pgvector 실패 시 keyword fallback 검색에 쓰입니다.
+
+현재 chunker는 너무 짧거나 숫자/표 중심인 조각을 제외합니다. 기상자료 표, ID 목록, 라벨만 있는 조각이 식물 관리 가이드처럼 임베딩되는 것을 막기 위한 기준입니다.
+
+권장 사전 검증:
+
+```bash
+python data/scripts/normalize_documents.py
+python data/scripts/chunk_documents.py
+python data/scripts/validate_processed_data.py --allow-missing
+```
 
 ## 5. 전체 실행 예시
 

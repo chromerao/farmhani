@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import List
-from fastapi import APIRouter, status, Depends, HTTPException, Path
+from fastapi import APIRouter, status, Depends, HTTPException, Path, Query
 from supabase import Client
 from app.auth.security import get_current_user
 from app.db.session import get_supabase_client
@@ -26,7 +26,8 @@ async def consult_plant_care(
             plant_id=str(request.plantId),
             care_log_id=str(request.careLogId) if request.careLogId else None,
             photo_id=str(request.photoId) if request.photoId else None,
-            question=request.question
+            question=request.question,
+            new_session=request.newSession
         )
         
         citations = []
@@ -35,7 +36,9 @@ async def consult_plant_care(
                 sourceId=cit["sourceId"],
                 title=cit["title"],
                 url=cit.get("url"),
-                publisher=cit.get("publisher")
+                publisher=cit.get("publisher"),
+                excerpt=cit.get("excerpt"),
+                section=cit.get("section")
             ))
             
         return PlantCareChatResponse(
@@ -61,11 +64,15 @@ async def consult_plant_care(
 
 @router.get("/sessions", response_model=List[ChatSession], summary="상담 세션 목록 조회")
 async def list_chat_sessions(
+    plantId: uuid.UUID | None = Query(None, description="특정 식물의 상담 세션만 조회"),
     current_user_id: uuid.UUID = Depends(get_current_user),
     db: Client = Depends(get_supabase_client)
 ):
     try:
-        response = db.table("chat_sessions").select("*").eq("user_id", str(current_user_id)).order("created_at", desc=True).execute()
+        query = db.table("chat_sessions").select("*").eq("user_id", str(current_user_id))
+        if plantId:
+            query = query.eq("plant_id", str(plantId))
+        response = query.order("created_at", desc=True).execute()
         sessions = []
         for item in response.data:
             sessions.append(ChatSession(
@@ -105,7 +112,9 @@ async def list_chat_messages(
                     sourceId=cit.get("sourceId") or cit.get("source_id"),
                     title=cit.get("title"),
                     url=cit.get("url"),
-                    publisher=cit.get("publisher")
+                    publisher=cit.get("publisher"),
+                    excerpt=cit.get("excerpt"),
+                    section=cit.get("section")
                 ))
                 
             db_content = item.get("content")
