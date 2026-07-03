@@ -178,10 +178,10 @@ def parse_botanic_xml(xml_root, plant_name):
                 "scientific_name": item.findtext("plantScnm", "").strip(),
                 "family_name": item.findtext("familyKorNm", "").strip(),
                 "genus_name": item.findtext("genusKorNm", "").strip(),
-                "description": item.findtext("description", "").strip()[:300],
-                "distribution": item.findtext("distribution", "").strip()[:150],
-                "flower_info": item.findtext("flowerInfo", "").strip()[:150],
-                "leaf_info": item.findtext("leafInfo", "").strip()[:150],
+                "description": item.findtext("description", "").strip(),
+                "distribution": item.findtext("distribution", "").strip(),
+                "flower_info": item.findtext("flowerInfo", "").strip(),
+                "leaf_info": item.findtext("leafInfo", "").strip(),
             })
     except Exception as e:
         print(f"[Warning] XML 파싱 오류: {e}")

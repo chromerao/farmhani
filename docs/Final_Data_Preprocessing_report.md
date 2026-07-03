@@ -9,15 +9,16 @@
 *   **Step 1. 1차 정규화 및 데이터 클렌징**
     *   **[핵심 명제] 파편화된 이종 데이터를 통일된 RAG 표준 스키마(JSONL)로 매핑하고, Regex 필터링을 통해 텍스트 노이즈(HTML태그/공백)를 제거하여 벡터 왜곡을 방지합니다.**
 *   **Step 2. 문맥 보존형 단락 분할 (청킹)**
-    *   **[핵심 명제] 문맥 손실(Context Loss)과 정보 희석(Information Dilution)을 방지하기 위해 문장 경계를 보존하는 500자 크기 및 50자 오버랩(Overlap)의 최적 단락 단위로 본문을 분할합니다.**
+    *   **[핵심 명제] 문맥 손실(Context Loss)과 정보 희석(Information Dilution)을 방지하기 위해 문장 경계를 보존하는 청크 사이즈(Chunk_size) 오버랩(Overlap)의 최적 단락 단위로 본문을 분할합니다.**
 *   **Step 3. 고밀도 벡터 임베딩 및 안전 검증**
     *   **[핵심 명제] OpenAI `text-embedding-3-small` (1536차원) 모델을 통해 텍스트 의미 공간을 실수형 좌표로 변환하고, 로컬 선캐싱(Decoupling) 및 드라이런 검증을 거쳐 DB 업로드 정합성을 확보합니다.**
 
 ---
 
-## 📂 2. 수집 및 전처리 대상 데이터셋 명세 (총 500건 + 식물 마스터 데이터)
+## 📂 2. 수집 및 전처리 대상 데이터셋 명세
 
 RAG 데이터 파이프라인에 주입된 데이터 출처 및 개별 수집/정제 규칙 요약 테이블은 다음과 같습니다.
+ - 현재 위치에선 청킹 단위/ 문서 단위가 혼재되어 있어 공통 청킹 단위 수량 구분은 문서 하단에서 확인할 수 있습니다. 이 부분은 참고 사항으로 확인하길 권장합니다
 
 | 데이터 소스명 | 물리 파일명 | 레코드 수 | 카테고리 (Category) | 적재 상태 / 범위 | 수집 경로 및 전처리/정제 핵심 규칙 |
 | :--- | :--- | :---: | :--- | :---: | :--- |
@@ -76,12 +77,22 @@ data/
 ### Step 1. 1차 전처리 및 데이터 정규화 (Formatting & Normalization)
 1.  **출처 정책 제어**: `catalog/source_registry.json`에 메타 규칙을 선언하여 파이프라인 코드와 출처 설정을 분리하여 확장성 보장.
 2.  **텍스트 정제(Cleaning)**: 본문에 섞여 있는 HTML 태그, 이중 공백, 불필요한 이스케이프 문자(`\n`, `\t` 등)를 Regex 필터로 일괄 제거하여 임베딩 시 벡터 왜곡 방지.
-3.  **식물 사전 연동**: 수집된 본문 내 단어들을 식물 사전([common.py](file:///C:/Users/playdata2/OneDrive/Desktop/프로젝트/3차%20단위%20프로젝트/SKN30-3rd-3Team/data/scripts/common.py))과 매핑하여 타겟 식물명(`crop_or_plant`) 태그를 명시적으로 주입. (검색 필터 연동용)
+3.  **식물 사전 연동**: 수집된 본문 내 단어들을 식물 사전(`data/scripts/common.py`)과 매핑하여 타겟 식물명(`crop_or_plant`) 태그를 명시적으로 주입. (검색 필터 연동용)
 
 ### Step 2. 문맥 보존형 단락 분할 (Chunking)
-1.  **청크 분할 파라미터**: `Chunk Size 500자` / `Overlap 50자` 셋팅. 
+1.  **청크 분할 파라미터**:
+    기본값: `max_chars 2200자 / overlap_chars 250자`
+    NCPMS 병해충 데이터: `max_chars 1400자 / overlap_chars 160자`
+    농사로 실내식물 / 작물 데이터: `max_chars 1200자 / overlap_chars 140자`
+                근거: 1. 병해충 문서는 작물명, 병명, 증상, 발생 조건, 예방 정보가 비교적 짧고 밀도가 높음
+                    2. 너무 큰 청크로 묶으면 한 chunk 안에 여러 정보가 섞여 검색 초점이 흐려질 수 있음
+                    3. 사용자는 보통 “증상”, “발생 조건”, “예방”처럼 구체 질문을 하므로 더 작은 단위가 유리함
+                    4. 답변에 citation으로 보여줄 excerpt가 너무 길어지지 않게 하기 위함
+                    5. 농사로 관리 문서도 물주기, 광도, 온도, 관리 난이도처럼 항목형 정보가 많아서 짧은 청크가 더 적합함
+                    6. HWPX는 표와 문단을 문장형으로 재구성한 문서라, 너무 잘게 잘라 표의 행 맥락이나 작업 일정 흐름이 끊기는 것을 예방하기 위함
+
 2.  **의미 경계 탐색**: 단순 글자 수 컷이 아닌 문장 마침표(`.`)와 개행(`\n`) 경계를 동적으로 추적하여 끊어짐 없는 자연스러운 단락 형성.
-3.  **중첩 보존**: 단락 간 경계 부근 지식이 검색 유실되지 않도록 50자의 중첩 공간을 두어 문맥 연속성(Context Preservation) 유지.
+3.  **중첩 보존**: 단락 간 경계 부근 지식이 검색 유실되지 않도록 중첩 공간(기본값: 250)을 두어 문맥 연속성(Context Preservation) 유지.
 
 ### Step 3. 고밀도 벡터 임베딩 (Vectorization)
 1.  **모델**: OpenAI `text-embedding-3-small` (1536 차원 출력).
@@ -93,21 +104,28 @@ data/
 이해를 돕기 위해 파이프라인 전처리 과정에 적용된 핵심 인자(Parameter)들과 RAG 고도화를 위한 기술적 역할들을 설명합니다.
 
 #### 1. 1차 전처리(정규화) 단계: 식물 사전 필터 (`KNOWN_CROP_OR_PLANT_NAMES` 및 Regex 정제)
-*   **어떤 역할을 하나요?**: 
+*   **어떤 역할을 하나요?**
     *   본문 텍스트 내 지저분한 HTML 태그나 이중 공백을 깨끗하게 청소하고, 식물 이름 목록을 대조하여 해당 글이 어떤 식물(예: `몬스테라`)에 관한 내용인지를 명확하게 찾아냅니다.
 *   **왜 RAG 고도화에 중요한가요?**: 
     *   책에 지저분한 낙서나 오타가 묻어있으면 사람이 글을 읽기 힘든 것처럼, AI도 지저분한 특수기호가 제거된 깨끗한 한국어 문장을 주입받아야 텍스트의 본뜻을 오해 없이 판별합니다.
-    *   특히 본문에서 식물명을 자동으로 추출하여 메타데이터 필드(`crop_or_plant`)에 미리 담아두면, 나중에 사용자가 AI에게 **"몬스테라 물주기법 알려줘"**라고 물었을 때 AI가 다른 식물(예: `고추`, `토마토`)의 병해충 문서를 헷갈려 호출해서 엉뚱한 대답을 생성하는 **환각(Hallucination) 에러를 원천적으로 100% 예방**할 수 있습니다.
+    *   특히 본문에서 식물명을 자동으로 추출하여 메타데이터 필드(`crop_or_plant`)에 미리 담아두면, 나중에 사용자가 AI에게 **"몬스테라 물주기법 알려줘"**라고 물었을 때 AI가 다른 식물(예: `고추`, `토마토`)의 병해충 문서를 헷갈려 호출해서 엉뚱한 대답을 생성하는 **환각(Hallucination) 에러를 가능성을 최소화**할 수 있습니다.
 
-#### 2. 청킹(단락 분할) 단계: `Chunk Size 500자` 및 `Overlap 50자`
-*   **어떤 역할을 하나요?**: 
-    *   수만 자에 달하는 원문 책 한 권을 통째로 쓰는 대신, 검색에 가장 효과적인 **500글자 단위의 핵심 요약 카드**들로 썰어서 나누어 줍니다. 이 카드를 자를 때 앞 뒷면의 꼬리와 머리글을 **50글자씩 겹치게(Overlap)** 중복해서 잘라냅니다.
+#### 2. 청킹(단락 분할) 단계: 기본 `max_chars=2200` 및 `overlap_chars=250`
+
+*   **어떤 역할을 하나요?**:
+    *   수집·정규화된 긴 문서를 한 번에 임베딩하지 않고, 검색과 답변 근거 제시에 적합한 단락 단위로 나누는 단계입니다. 기본 청킹 기준은 `max_chars=2200`, `overlap_chars=250`이며, 문서 성격에 따라 일부 출처는 더 작은 청크 크기를 사용합니다.
+    *   NCPMS 병해충 참고 문서는 `max_chars=1400`, `overlap_chars=160`을 적용합니다. 병해충 문서는 작물명, 병해충명, 증상/피해, 발생 조건, 예방 정보가 비교적 짧고 밀도 있게 구성되어 있어, 너무 큰 청크로 묶으면 검색 초점이 흐려질 수 있기 때문입니다.
+    *   농사로 실내식물·작물 관리 문서는 `max_chars=1200`, `overlap_chars=140`을 적용합니다. 물주기, 광도, 온도, 관리 난이도처럼 항목형 정보가 많아 비교적 짧은 단위로 나누는 것이 검색 결과와 답변 근거를 더 명확하게 만듭니다.
+    *   농사로 작업일정 HWPX 문서(`nongsaro_work_schedule`)는 기본값인 `max_chars=2200`, `overlap_chars=250`을 유지합니다. 표와 문단을 문장형으로 재구성한 문서이기 때문에 지나치게 작게 자르면 작업 일정의 흐름이나 표 행 간 맥락이 끊길 수 있습니다.
+
 *   **왜 RAG 고도화에 중요한가요?**:
-    *   **500자 (Chunk Size)**: 책 전체를 임베딩하면 세부적인 정보(예: 특정 해충 농약 희석 배수)가 전체 맥락 속에 묻혀 희석되는 **정보 희석(Information Dilution)** 현상이 일어납니다. 반대로 너무 작게 20~30자 단위로 쪼개면 문장의 맥락이 깨져 주어나 목적어가 빠지는 **문맥 손실(Context Loss)**이 일어납니다. 500자는 AI가 한 번에 답변을 참고하고 질문을 매칭하기에 최적화된 최상의 글자 수 규격입니다.
-    *   **50자 (Overlap)**: 문장을 500자씩 정확히 쪼개다 보면 문장 한가운데가 뚝 끊길 수 있습니다. 이를 방지하기 위해 앞뒤 요약 카드의 내용을 50글자씩 중복시켜 겹쳐놓으면, 설령 분할 경계선 부근에 질문 키워드가 걸쳐 있더라도 **의미의 단절 없이 질문을 정확히 탐색**해 낼 수 있게 도와줍니다.
+    *   **정보 희석 방지**: 너무 긴 문서를 하나의 벡터로 만들면 특정 증상, 관리 조건, 예방 정보가 전체 문맥 속에 묻힐 수 있습니다. 청킹은 사용자의 질문과 직접 관련 있는 부분이 검색될 가능성을 높입니다.
+    *   **문맥 손실 완화**: 반대로 문서를 너무 짧게 자르면 문장의 주어, 조건, 결론이 서로 다른 청크로 분리되어 답변 근거로 쓰기 어려워집니다. 현재 파이프라인은 출처별 문서 구조에 맞춰 청크 크기를 조정해 이 균형을 맞춥니다.
+    *   **의미 경계 보존**: 청크를 자를 때 단순히 글자 수로 끊지 않고, 문장 마침표(`.`)와 개행(`\n`) 위치를 탐색하여 가능한 한 자연스러운 단락 경계에서 분할합니다.
+    *   **중첩 구간 유지**: 청크 사이에는 overlap을 두어, 분할 지점 근처의 키워드나 설명이 검색 과정에서 누락되지 않도록 합니다.
 
 #### 3. 임베딩(벡터화) 단계: `text-embedding-3-small` 모델 및 `1536차원`
-*   **어떤 역할을 하나요?**: 
+*   **어떤 역할을 하나요?**:
     *   텍스트 글자를 사람이 아닌 컴퓨터가 의미론적 유사도로 비교할 수 있도록 다차원 공간의 **수학적 숫자(실수형 벡터 좌표)**로 변환하는 지도 제작 엔진입니다.
 *   **왜 RAG 고도화에 중요한가요?**:
     *   **text-embedding-3-small**: OpenAI가 만든 최신 임베딩 렌더러로, 한국어 단어 사이의 아주 세세하고 미묘한 어감 차이(예: "식물이 시들다"와 "식물이 마르다"의 미세한 뉘앙스 차이)를 날카롭고 민감하게 포착해 냅니다.
@@ -144,23 +162,31 @@ data/
     *   임베딩 벡터의 크기가 정확히 `1536` 차원인지 확인 완료.
     *   `pesticide_safety` 카테고리 데이터에 `pesticide_caution` 안전 주의 태그가 강제 주입되었는지 검증 완료.
 
-### 6.2 데이터 소스별 최종 적재량 검증 (Supabase 로드 완료 팩트)
-*   **전체 적재 완료 청크 수**: **1,000건** (팀 협업 수집 계획에 따라 총 12개 세부 데이터 소스를 통해 Supabase DB에 최종 통합 적재 완료)
+### 6.2 데이터 소스별 최종 적재량 검증 (Supabase 로드 완료)
 
-| 실제 출처 UUID (`source_id`) | 출처 키 (`source_key`) / 출처명 | 적재 수량 | category 구분 | usage_scope 적용 |
+*   **전체 적재 완료 청크 수**: **1,682건**
+    Supabase `rag_chunks` 테이블 기준, 확인한 출처별 청크 적재량은 다음과 같습니다.
+    출처명 및 category 로 구분하였습니다
+
+| 실제 출처 UUID (`source_id`) | 출처 키 (`source_key`) / 출처명 | 적재 수량 | category 구분 | usage_scope |
 | :--- | :--- | :---: | :--- | :--- |
-| `5d1b013e-d5c5-5bf4-9df7-3b386bdd55ae` | `nongsaro_crop_tech` (농사로 작목 정보) | 268건 | `crop_care` | `rag` |
-| `94847612-80e8-5db4-8d80-9e25439283ab` | `weekly_farming_info` (농사로 농작업 일정) | 235건 | `crop_growth_stage` | `context_later` |
-| `c5430459-dec8-5622-97b8-6553428594f2` | `nongsaro_crop_ebook` (농사로 작목 전자책) | 100건 | `crop_care` | `rag_and_catalog` |
-| `50f6d3ff-9aac-5d2a-b9ed-5ea7427533d7` | `national_botanic_garden` (국립수목원 도감) | 100건 | `indoor_care` | `rag` |
-| `0384cc48-1038-5213-86e2-dbdb2c9c36a6` | `aihub_agriculture_datasets` (AI Hub 이미지메타) | 100건 | `weather_context` | `reference_only` |
-| `3fe65151-5be8-53bf-bc6c-b1128d78ba15` | `psis_pesticide_safety` (PSIS 농약 정보) | 82건 | `pesticide_safety` | `safety_reference_only` |
-| `5ca212d3-9842-5c42-ab5f-089796d177c1` | `ncpms_pest_reference` (NCPMS 병해충 정보) | 59건 | `pest_reference` | `reference_only` |
-| `834c02cc-a5fe-5bfc-81f0-50d4f0412e93` | `aihub_pest_classification` (AI Hub 병해충 분류) | 36건 | `pest_reference` | `reference_only` |
-| `55087ab2-5665-5d47-a66a-5e1dd0cd1fe9` | `naver_encyclopedia` (네이버 지식백과) | 8건 | `indoor_care` | `rag` |
-| `367d9495-aa11-52f6-b42e-b97eb6ad79a4` | `aihub_seedling_growth` (AI Hub 육묘생장 데이터) | 7건 | `crop_growth_stage` | `rag_and_image_manifest` |
-| `651507af-3718-5974-87f7-3a77f85290ee` | `aihub_horticulture_watering` (AI Hub 물주기) | 3건 | `indoor_care` | `rag_and_image_manifest` |
-| `16d08105-0476-5584-9e07-6a91f1e82966` | `ncpms_openapi_guide` (NCPMS API 가이드) | 2건 | `pest_reference` | `api_contract_reference` |
+| `5ca212d3-9842-5c42-ab5f-089796d177c1` | `ncpms_pest_reference` (NCPMS 병해충 도감/검색 OpenAPI) | 477건 | `pest_reference` | `reference_only` |
+| `5d1b013e-d5c5-5bf4-9df7-3b386bdd55ae` | `nongsaro_crop_tech` (농사로 작목정보) | 268건 | `crop_care` | `rag` |
+| `94847612-80e8-5db4-8d80-9e25439283ab` | `nongsaro_work_schedule` (농사로 농작업일정) | 235건 | `crop_care` | `rag` |
+| `3fe65151-5be8-53bf-bc6c-b1128d78ba15` | `psis_pesticide_safety` (PSIS 농약등록정보 OpenAPI) | 100건 | `pesticide_safety` | `safety_reference_only` |
+| `c5430459-dec8-5622-97b8-6553428594f2` | `nongsaro_crop_ebook` (농사로 작목별 농업기술정보 cropEbook) | 100건 | `crop_care` | `rag_and_catalog` |
+| `0384cc48-1038-5213-86e2-dbdb2c9c36a6` | `aihub_agriculture_datasets` (AI Hub 농축수산 데이터 목록) | 100건 | `image_reference` | `image_manifest_only` |
+| `2d0a2016-f2f1-523b-bd19-e05beac2d904` | `weekly_farming_info` (농사로 주간농사정보) | 100건 | `weekly_farming` | `rag` |
+| `b95e6513-4ca9-53d8-88c5-5745662766c6` | `rda_weather365` (농업날씨365) | 100건 | `weather_context` | `context_later` |
+| `651507af-3718-5974-87f7-3a77f85290ee` | `naver_encyclopedia` (네이버 지식백과 식물 문서) | 49건 | `plant_reference` | `rag` |
+| `834c02cc-a5fe-5bfc-81f0-50d4f0412e93` | `aihub_horticulture_watering_growth` (AI Hub 원예식물 화훼류 물주기/수분공급) | 36건 | `indoor_care` | `rag_and_image_manifest` |
+| `50f6d3ff-9aac-5d2a-b9ed-5ea7427533d7` | `national_botanic_garden` (국립수목원 식물도감 및 표준식물목록) | 36건 | `indoor_care` | `rag` |
+| `50f6d3ff-9aac-5d2a-b9ed-5ea7427533d7` | `national_botanic_garden` (국립수목원 식물도감 및 표준식물목록) | 35건 | `ornamental_care` | `rag` |
+| `50f6d3ff-9aac-5d2a-b9ed-5ea7427533d7` | `national_botanic_garden` (국립수목원 식물도감 및 표준식물목록) | 29건 | `crop_care` | `rag` |
+| `55087ab2-5665-5d47-a66a-5e1dd0cd1fe9` | `nongsaro_indoor_catalog` (농사로 실내식물 정보) | 8건 | `indoor_care` | `rag_and_catalog` |
+| `367d9495-aa11-52f6-b42e-b97eb6ad79a4` | `aihub_seedling_growth` (AI Hub In-door 육묘작물 생장 데이터) | 7건 | `crop_growth_stage` | `rag_and_image_manifest` |
+| `16d08105-0476-5584-9e07-6a91f1e82966` | `ncpms_openapi_guide` (NCPMS OpenAPI 안내) | 2건 | `pest_reference` | `api_contract_reference` |
+
 
 본 보고서에 명시된 모든 전처리 흐름 및 가공 규격은 수동 검수 및 자동 검증 스크립트를 통해 무결성이 입증되었으며, 원격 Supabase DB 테이블과의 연동 적재가 최종 완수되었습니다.
 
