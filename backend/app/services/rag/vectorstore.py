@@ -9,7 +9,6 @@ from app.core.config import settings
 # 프로젝트 루트 경로 (Fallback 파일 조회용)
 backend_dir = Path(__file__).resolve().parents[4]
 docs_json_path = backend_dir / "data" / "processed" / "gardening_docs.json"
-SUPABASE_KEYWORD_SCAN_LIMIT = 3000
 
 # Two-Stage Retrieval: 1단계(벡터 검색)는 임계값을 완화해 후보를 폭넓게 수집(Recall)하고,
 # 2단계(grade_or_rerank)에서 LLM이 엄격하게 정제(Precision)한다.
@@ -26,6 +25,8 @@ class SearchResult:
 STOPWORDS = {
     "식물", "작물", "사진", "분석", "상태", "관리", "질문", "현재", "공식", "문서",
     "어떻게", "해주세요", "알려줘", "알려주세요", "가능성", "상담", "진단",
+    "얼마나", "자주", "주어야", "하나요", "할까요", "되나요", "있나요", "인가요",
+    "무엇", "어떤", "언제", "해야", "합니다", "주세요",
     "plant", "care", "photo", "image", "document", "official",
 }
 
@@ -35,44 +36,14 @@ CARE_TERMS = {
     "수분공급", "관수", "생육", "건조", "과습", "일반", "황화", "갈변", "시듦",
 }
 
-PLANT_QUERY_TERMS = {
-    "몬스테라", "스투키", "산세베리아", "선인장", "금전수", "테이블야자", "홍콩야자", "호접란",
-    "스파티필럼", "보스턴고사리", "부레옥잠", "올리브나무", "오렌지쟈스민", "관음죽",
-    "벵갈고무나무", "디펜바키아", "토마토", "고추", "상추", "배추", "파프리카", "양배추",
-    "딸기", "감자", "고구마", "장미", "벚꽃", "개나리", "해바라기", "국화", "라벤더",
-    "로즈마리", "바질", "민트", "깻잎", "오이", "호박", "가지", "마늘", "양파", "부추",
-}
-
-PLANT_ALIASES = {
-    "monstera": "몬스테라",
-    "deliciosa": "몬스테라",
-    "sansevieria": "스투키",
-    "dracaena": "스투키",
-    "zamioculcas": "금전수",
-    "spathiphyllum": "스파티필럼",
-    "orchid": "호접란",
-    "phalaenopsis": "호접란",
-    "tomato": "토마토",
-    "lycopersicum": "토마토",
-    "capsicum": "고추",
-    "pepper": "고추",
-    "lettuce": "상추",
-    "lactuca": "상추",
-    "strawberry": "딸기",
-    "fragaria": "딸기",
-    "potato": "감자",
-    "solanum": "감자",
-    "sweet": "고구마",
-    "rose": "장미",
-    "rosa": "장미",
-    "helianthus": "해바라기",
-    "forsythia": "개나리",
-}
+# 식물명/별칭 사전은 plant_catalog 테이블에서 TTL 캐시로 로드한다 (plant_terms.py).
+# DB 조회 실패 시 하드코딩된 기본 사전으로 자동 fallback 된다.
+from app.services.rag.plant_terms import get_plant_aliases, get_plant_terms
 
 
 def expand_query_aliases(query: str) -> str:
     lower_query = query.lower()
-    aliases = [alias for key, alias in PLANT_ALIASES.items() if key in lower_query]
+    aliases = [alias for key, alias in get_plant_aliases().items() if key in lower_query]
     if not aliases:
         return query
     return f"{query} {' '.join(dict.fromkeys(aliases))}"
@@ -108,7 +79,8 @@ def filter_by_specific_terms(query: str, results: List[SearchResult]) -> List[Se
     terms = specific_query_terms(query)
     if not terms:
         return results
-    plant_terms = [term for term in terms if term in PLANT_QUERY_TERMS]
+    known_plant_terms = get_plant_terms()
+    plant_terms = [term for term in terms if term in known_plant_terms]
 
     filtered = []
     for result in results:
@@ -131,7 +103,7 @@ def filter_by_specific_terms(query: str, results: List[SearchResult]) -> List[Se
                     metadata.get("excerpt"),
                 ]
             ).lower()
-            title_plant_terms = [term for term in PLANT_QUERY_TERMS if term.lower() in title_haystack]
+            title_plant_terms = [term for term in known_plant_terms if term.lower() in title_haystack]
             if title_plant_terms and not any(term in plant_terms for term in title_plant_terms):
                 continue
             if any(term.lower() in haystack for term in plant_terms):
@@ -195,47 +167,19 @@ def merge_results(*groups: List[SearchResult], top_k: int, rrf_k: int = 60) -> L
         
     return sorted(merged_results.values(), key=lambda item: item.score, reverse=True)[:top_k]
 
-def supabase_keyword_search(query: str, top_k: int = 3) -> List[SearchResult]:
-    """
-    pgvector RPC가 없거나 스키마 버전 차이로 실패하는 환경에서 Supabase RAG 테이블을 직접 읽는 fallback입니다.
-    데이터팀 최신 스키마인 rag_chunks.text / symptom_keywords / metadata를 우선 사용합니다.
-    """
-    query_tokens = tokenize_query(query)
-    if not query_tokens:
-        return []
+KEYWORD_SELECT = "chunk_id,source_id,text,symptom_keywords,crop_or_plant,metadata,rag_sources(title,url,publisher)"
+KEYWORD_FILTER_ROW_LIMIT = 120
+LEGACY_SCAN_ROW_LIMIT = 1000
 
-    rows: list[Dict[str, Any]] = []
-    selects = [
-        "chunk_id,source_id,text,symptom_keywords,metadata,rag_sources(title,url,publisher)",
-        "chunk_id,source_id,text,symptom_keywords,rag_sources(title,url,publisher)",
-        "id,source_id,content,metadata,rag_sources(title,url,publisher)",
-        "id,source_id,content,rag_sources(title,url,publisher)",
-    ]
-    last_error: Exception | None = None
-    for select_clause in selects:
-        try:
-            start = 0
-            page_size = 500
-            while start < SUPABASE_KEYWORD_SCAN_LIMIT:
-                response = (
-                    session.supabase.table("rag_chunks")
-                    .select(select_clause)
-                    .range(start, start + page_size - 1)
-                    .execute()
-                )
-                page = response.data or []
-                rows.extend(page)
-                if len(page) < page_size:
-                    break
-                start += page_size
-            break
-        except Exception as exc:
-            last_error = exc
-            rows = []
-    if not rows and last_error is not None:
-        print(f"[RAG SEARCH WARNING] Supabase keyword fallback 조회 실패: {last_error}")
-        return []
 
+def _sanitize_filter_term(term: str) -> str:
+    """PostgREST or_ 필터 구문을 깨뜨릴 수 있는 문자를 제거한다."""
+    for ch in (",", "(", ")", "{", "}", "%", "*", '"'):
+        term = term.replace(ch, "")
+    return term.strip()
+
+
+def _score_rows(rows: list, query_tokens: List[str], top_k: int) -> List[SearchResult]:
     results = []
     for item in rows:
         content = item.get("text") or item.get("content") or ""
@@ -247,9 +191,65 @@ def supabase_keyword_search(query: str, top_k: int = 3) -> List[SearchResult]:
         score = score_text(query_tokens, content, keywords)
         if score >= 2.0:
             results.append(SearchResult(content=content, metadata=normalize_metadata(item), score=score))
-
     results.sort(key=lambda result: result.score, reverse=True)
     return results[:top_k]
+
+
+def supabase_keyword_search(query: str, top_k: int = 3) -> List[SearchResult]:
+    """
+    벡터 검색을 보완하는 키워드 검색기입니다.
+    검색어를 서버측 필터(crop_or_plant contains / text ilike)로 전달해
+    필요한 행만 받아온다 — 과거의 테이블 풀스캔(최대 3,000행) 방식을 대체한다.
+    """
+    query_tokens = tokenize_query(query)
+    if not query_tokens:
+        return []
+
+    terms = [_sanitize_filter_term(t) for t in specific_query_terms(query)]
+    terms = [t for t in terms if len(t) >= 2]
+    known_plant_terms = get_plant_terms()
+    plant_terms = [t for t in terms if t in known_plant_terms]
+    other_terms = [t for t in terms if t not in known_plant_terms][:4]
+
+    conditions: list[str] = []
+    for term in plant_terms:
+        # crop_or_plant 배열 정확 매칭 + 본문 부분 매칭
+        conditions.append(f"crop_or_plant.cs.{{{term}}}")
+        conditions.append(f"text.ilike.%{term}%")
+    for term in other_terms:
+        conditions.append(f"text.ilike.%{term}%")
+    if not conditions:
+        # 특정 용어가 없으면 상위 토큰으로라도 서버측 필터를 건다
+        for token in [_sanitize_filter_term(t) for t in query_tokens[:4]]:
+            if len(token) >= 2:
+                conditions.append(f"text.ilike.%{token}%")
+    if not conditions:
+        return []
+
+    try:
+        response = (
+            session.supabase.table("rag_chunks")
+            .select(KEYWORD_SELECT)
+            .or_(",".join(conditions))
+            .limit(KEYWORD_FILTER_ROW_LIMIT)
+            .execute()
+        )
+        return _score_rows(response.data or [], query_tokens, top_k)
+    except Exception as exc:
+        print(f"[RAG SEARCH WARNING] 서버측 키워드 필터 실패, 제한 스캔으로 전환: {exc}")
+
+    # 서버측 필터가 실패하는 스키마 환경을 위한 제한된 스캔 fallback
+    try:
+        response = (
+            session.supabase.table("rag_chunks")
+            .select(KEYWORD_SELECT)
+            .limit(LEGACY_SCAN_ROW_LIMIT)
+            .execute()
+        )
+        return _score_rows(response.data or [], query_tokens, top_k)
+    except Exception as exc:
+        print(f"[RAG SEARCH WARNING] Supabase keyword fallback 조회 실패: {exc}")
+        return []
 
 def fallback_keyword_search(query: str, top_k: int = 3) -> List[SearchResult]:
     """
