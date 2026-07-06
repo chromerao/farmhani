@@ -29,8 +29,11 @@ def get_current_user(
         # 데이터베이스 스키마(UUID 형식)와 맞추기 위해 UUID 객체로 변환하여 넘겨줍니다.
         return uuid.UUID(auth_response.user.id)
         
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception:
+        # 내부 예외 문자열을 클라이언트에 노출하지 않는다 (스키마/엔드포인트 정보 유출 방지)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"만료되거나 올바르지 않은 토큰입니다: {str(e)}"
+            detail="만료되거나 올바르지 않은 토큰입니다."
         )

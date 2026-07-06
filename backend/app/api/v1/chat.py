@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from datetime import datetime
@@ -6,9 +7,12 @@ from fastapi import APIRouter, status, Depends, HTTPException, Path, Query
 from supabase import Client
 from app.auth.security import get_current_user
 from app.core.config import settings
+from app.core.ratelimit import rate_limit_chat
 from app.db.session import get_supabase_client
 from app.schemas.chat import PlantCareChatRequest, PlantCareChatResponse, Citation, ChatSession, ChatMessage, ChatModelInfo
 from app.services.rag.pipeline import chat_mode_prefix, run_rag_workflow
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["Plant Care RAG Chat"])
 
@@ -39,7 +43,8 @@ def get_chat_model_info():
 def consult_plant_care(
     request: PlantCareChatRequest,
     current_user_id: uuid.UUID = Depends(get_current_user),
-    db: Client = Depends(get_supabase_client)
+    db: Client = Depends(get_supabase_client),
+    _rate_limit: None = Depends(rate_limit_chat)
 ):
     """
     제공된 식물 ID, 최근 재배 일지, 업로드 사진을 기반으로 공공 원예 문서 RAG 모델을 구동하여 상태 진단 및 처방 가이드를 반환합니다.
@@ -84,10 +89,11 @@ def consult_plant_care(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"식물 상담 RAG 수행 중 오류가 발생했습니다: {str(e)}"
+            detail="식물 상담 RAG 수행 중 오류가 발생했습니다."
         )
 
 @router.get("/sessions", response_model=List[ChatSession], summary="상담 세션 목록 조회")
@@ -114,10 +120,11 @@ def list_chat_sessions(
                 createdAt=datetime.fromisoformat(item["created_at"])
             ))
         return sessions
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"상담 세션 목록 조회 중 오류가 발생했습니다: {str(e)}"
+            detail="상담 세션 목록 조회 중 오류가 발생했습니다."
         )
 
 @router.get("/sessions/{sessionId}/messages", response_model=List[ChatMessage], summary="세션별 대화 메시지 이력 조회")
@@ -167,8 +174,9 @@ def list_chat_messages(
         return messages
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"대화 메시지 조회 중 오류가 발생했습니다: {str(e)}"
+            detail="대화 메시지 조회 중 오류가 발생했습니다."
         )

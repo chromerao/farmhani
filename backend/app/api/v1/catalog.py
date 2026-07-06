@@ -1,7 +1,10 @@
+import logging
 from fastapi import APIRouter, Query, status, HTTPException
 from typing import List, Optional
 from app.schemas.catalog import PlantCatalogItem
 from app.db import session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/plant-catalog", tags=["Plant Catalog"])
 
@@ -37,8 +40,9 @@ def list_or_search_catalog(
             ))
         return catalog_items
         
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"품종 도감 조회 중 오류가 발생했습니다: {str(e)}"
+            detail="품종 도감 조회 중 오류가 발생했습니다."
         )

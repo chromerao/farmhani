@@ -15,10 +15,16 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Farm하니? Plant Care RAG API"
     API_V1_STR: str = "/api/v1"
     
-    # CORS Origins
-    BACKEND_CORS_ORIGINS: Annotated[
+    # CORS Origins — 운영 배포 시 Render 환경변수 CORS_ORIGINS에 프론트 도메인을 콤마로 등록한다.
+    # (예: CORS_ORIGINS=https://farmhani.vercel.app,https://farmhani.example.com)
+    CORS_ORIGINS: Annotated[
         Union[List[str], str], BeforeValidator(check_cors_origins)
-    ] = ["*"]
+    ] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
     # Supabase 설정
     SUPABASE_URL: str

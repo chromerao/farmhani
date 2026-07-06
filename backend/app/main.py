@@ -1,16 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.config import settings
+
 app = FastAPI(
     title="Farm하니? Plant Care RAG API",
     description="식물 주치의 AI MVP용 FastAPI 서버입니다.",
     version="0.1.0"
 )
 
-# CORS 설정
+# CORS 설정 — 허용 도메인은 환경변수 CORS_ORIGINS로 제어 (기본값: 로컬 개발 도메인)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 실제 배포 시 특정 도메인으로 제한 필요
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

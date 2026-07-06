@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -10,6 +11,8 @@ from app.db.session import get_supabase_client, get_supabase_service_client
 from app.core.config import settings
 from app.schemas.plant import PlantPhoto
 from app.schemas.upload import UploadSignedUrlRequest, UploadSignedUrlResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/uploads", tags=["Uploads"])
 
@@ -44,10 +47,11 @@ def create_signed_upload_url(
             signedUrl=signed_url,
             storagePath=storage_path
         )
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Signed URL 발급 중 오류가 발생했습니다: {str(e)}"
+            detail="Signed URL 발급 중 오류가 발생했습니다."
         )
 
 @router.post("/plant-photo", response_model=PlantPhoto, status_code=status.HTTP_201_CREATED, summary="식물 사진 파일 업로드 및 메타데이터 등록")
@@ -125,8 +129,9 @@ async def upload_plant_photo(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"식물 사진 업로드 중 오류가 발생했습니다: {str(e)}"
+            detail="식물 사진 업로드 중 오류가 발생했습니다."
         )

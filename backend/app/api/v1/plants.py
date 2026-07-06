@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, date, timezone
 from typing import List
@@ -7,6 +8,8 @@ from app.schemas.care_log import CareLog, CareLogCreate, CareLogUpdate
 from app.auth.security import get_current_user
 from app.db.session import get_supabase_client
 from supabase import Client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/plants", tags=["Plants"])
 
@@ -33,10 +36,11 @@ def list_plants(
                 createdAt=datetime.fromisoformat(item["created_at"])
             ))
         return plants
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"식물 목록 조회 중 오류가 발생했습니다: {str(e)}"
+            detail="식물 목록 조회 중 오류가 발생했습니다."
         )
 
 @router.post("", response_model=Plant, status_code=status.HTTP_201_CREATED, summary="식물 프로필 신규 등록")
@@ -74,10 +78,11 @@ def create_plant(
             imageUrl=item.get("image_url"),
             createdAt=datetime.fromisoformat(item["created_at"])
         )
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"식물 등록 중 오류가 발생했습니다: {str(e)}"
+            detail="식물 등록 중 오류가 발생했습니다."
         )
 
 @router.post("/{plantId}/care-logs", response_model=CareLog, status_code=status.HTTP_201_CREATED, summary="식물 재배/물주기 로그 등록")
@@ -126,10 +131,11 @@ def create_care_log(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"재배 로그 등록 중 오류가 발생했습니다: {str(e)}"
+            detail="재배 로그 등록 중 오류가 발생했습니다."
         )
 
 @router.post("/{plantId}/photos", response_model=PlantPhoto, status_code=status.HTTP_201_CREATED, summary="식물 사진 메타데이터 등록")
@@ -176,10 +182,11 @@ def create_plant_photo(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"식물 사진 등록 중 오류가 발생했습니다: {str(e)}"
+            detail="식물 사진 등록 중 오류가 발생했습니다."
         )
 
 @router.get("/{plantId}", response_model=PlantDetail, summary="식물 상세 프로필 조회")
@@ -239,10 +246,11 @@ def get_plant_detail(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"식물 상세 조회 중 오류가 발생했습니다: {str(e)}"
+            detail="식물 상세 조회 중 오류가 발생했습니다."
         )
 
 @router.delete("/{plantId}", status_code=status.HTTP_204_NO_CONTENT, summary="식물 프로필 삭제")
@@ -266,10 +274,11 @@ def delete_plant(
         return
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"식물 삭제 중 오류가 발생했습니다: {str(e)}"
+            detail="식물 삭제 중 오류가 발생했습니다."
         )
 
 @router.patch("/{plantId}", response_model=Plant, summary="식물 프로필 수정")
@@ -317,10 +326,11 @@ def update_plant(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"식물 프로필 수정 중 오류가 발생했습니다: {str(e)}"
+            detail="식물 프로필 수정 중 오류가 발생했습니다."
         )
 
 @router.put("/{plantId}/care-logs/{logId}", response_model=CareLog, summary="재배 로그 수정")
@@ -372,10 +382,11 @@ def update_care_log(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"재배 로그 수정 중 오류가 발생했습니다: {str(e)}"
+            detail="재배 로그 수정 중 오류가 발생했습니다."
         )
 
 @router.delete("/{plantId}/care-logs/{logId}", status_code=status.HTTP_204_NO_CONTENT, summary="재배 로그 삭제")
@@ -403,9 +414,10 @@ def delete_care_log(
         return
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"재배 로그 삭제 중 오류가 발생했습니다: {str(e)}"
+            detail="재배 로그 삭제 중 오류가 발생했습니다."
         )
 
