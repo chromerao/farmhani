@@ -70,6 +70,23 @@ export type PlantCareChatResponse = {
   messageId?: string;
 };
 
+export type ChatProgressEvent = {
+  step: number;
+  total: number;
+  node: string;
+  label: string;
+};
+
+export type WateringReminder = {
+  plantId: string;
+  name: string;
+  species?: string | null;
+  lastWateredAt?: string | null;
+  daysSinceWatered?: number | null;
+  intervalDays: number;
+  status: "due" | "upcoming" | "ok" | "unknown";
+};
+
 export type ChatModelInfo = {
   chatModel: string;
   visionModel: string;

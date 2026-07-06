@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, date, timezone
 from typing import List
 from fastapi import APIRouter, Path, status, Depends, HTTPException
-from app.schemas.plant import Plant, PlantCreate, PlantPhoto, PlantPhotoCreate, PlantDetail, PlantUpdate
+from app.schemas.plant import Plant, PlantCreate, PlantPhoto, PlantPhotoCreate, PlantDetail, PlantUpdate, WateringReminder
 from app.schemas.care_log import CareLog, CareLogCreate, CareLogUpdate
 from app.auth.security import get_current_user
 from app.db.session import get_supabase_client
@@ -41,6 +41,76 @@ def list_plants(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="식물 목록 조회 중 오류가 발생했습니다."
+        )
+
+# 종별 기본 물주기 간격이 정해지기 전까지 사용하는 공통 권장 간격
+DEFAULT_WATERING_INTERVAL_DAYS = 7
+
+# 주의: 이 라우트는 GET /plants/{plantId} 보다 먼저 선언되어야 한다 (경로 매칭 우선순위)
+@router.get("/reminders", response_model=List[WateringReminder], summary="물주기 리마인더 조회")
+def list_watering_reminders(
+    current_user_id: uuid.UUID = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
+):
+    """
+    사용자의 모든 식물에 대해 마지막 물 준 날짜(care_logs.watered_at) 기준으로
+    물주기 도래 여부를 계산해 반환합니다.
+    """
+    try:
+        plants_res = db.table("plants").select("id,name,species").eq("user_id", str(current_user_id)).execute()
+        plants = plants_res.data or []
+        if not plants:
+            return []
+
+        plant_ids = [item["id"] for item in plants]
+        logs_res = (
+            db.table("care_logs")
+            .select("plant_id,watered_at")
+            .in_("plant_id", plant_ids)
+            .not_.is_("watered_at", "null")
+            .order("watered_at", desc=True)
+            .execute()
+        )
+        last_watered: dict[str, str] = {}
+        for log in logs_res.data or []:
+            pid = log["plant_id"]
+            if pid not in last_watered:
+                last_watered[pid] = log["watered_at"]
+
+        today = datetime.now(timezone.utc).date()
+        reminders = []
+        for item in plants:
+            watered_raw = last_watered.get(item["id"])
+            days_since = None
+            reminder_status = "unknown"
+            if watered_raw:
+                watered_date = date.fromisoformat(str(watered_raw)[:10])
+                days_since = (today - watered_date).days
+                remaining = DEFAULT_WATERING_INTERVAL_DAYS - days_since
+                if remaining <= 0:
+                    reminder_status = "due"
+                elif remaining <= 1:
+                    reminder_status = "upcoming"
+                else:
+                    reminder_status = "ok"
+            reminders.append(WateringReminder(
+                plantId=uuid.UUID(item["id"]),
+                name=item["name"],
+                species=item.get("species"),
+                lastWateredAt=str(watered_raw)[:10] if watered_raw else None,
+                daysSinceWatered=days_since,
+                intervalDays=DEFAULT_WATERING_INTERVAL_DAYS,
+                status=reminder_status
+            ))
+        # 물이 급한 순서로 정렬 (due → upcoming → unknown → ok)
+        order = {"due": 0, "upcoming": 1, "unknown": 2, "ok": 3}
+        reminders.sort(key=lambda r: (order.get(r.status, 9), -(r.daysSinceWatered or 0)))
+        return reminders
+    except Exception:
+        logger.exception("API 처리 중 오류 발생")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="물주기 리마인더 조회 중 오류가 발생했습니다."
         )
 
 @router.post("", response_model=Plant, status_code=status.HTTP_201_CREATED, summary="식물 프로필 신규 등록")

@@ -35,3 +35,12 @@ class PlantPhoto(PlantPhotoCreate):
 class PlantDetail(Plant):
     careLogs: List[CareLog] = Field(default_factory=list, description="식물 재배 일지 목록")
     photos: List[PlantPhoto] = Field(default_factory=list, description="식물 사진 히스토리 목록")
+
+class WateringReminder(BaseModel):
+    plantId: UUID = Field(..., description="식물 UUID")
+    name: str = Field(..., description="식물 이름")
+    species: Optional[str] = Field(None, description="식물 품종")
+    lastWateredAt: Optional[str] = Field(None, description="마지막 물 준 날짜 (ISO date, 기록 없으면 null)")
+    daysSinceWatered: Optional[int] = Field(None, description="마지막 물주기 이후 경과 일수")
+    intervalDays: int = Field(..., description="권장 물주기 간격 (일)")
+    status: str = Field(..., description="due(물 줄 때) | upcoming(1일 이내 도래) | ok(여유) | unknown(기록 없음)")

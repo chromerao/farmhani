@@ -1,16 +1,18 @@
+import json
 import logging
 import os
 import uuid
 from datetime import datetime
 from typing import List
 from fastapi import APIRouter, status, Depends, HTTPException, Path, Query
+from fastapi.responses import StreamingResponse
 from supabase import Client
 from app.auth.security import get_current_user
 from app.core.config import settings
 from app.core.ratelimit import rate_limit_chat
 from app.db.session import get_supabase_client
 from app.schemas.chat import PlantCareChatRequest, PlantCareChatResponse, Citation, ChatSession, ChatMessage, ChatModelInfo
-from app.services.rag.pipeline import chat_mode_prefix, run_rag_workflow
+from app.services.rag.pipeline import chat_mode_prefix, run_rag_workflow, run_rag_workflow_stream
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,52 @@ def consult_plant_care(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="식물 상담 RAG 수행 중 오류가 발생했습니다."
         )
+
+@router.post("/plant-care/stream", summary="식물 케어 RAG 상담 실행 (SSE 진행 스트리밍)")
+def consult_plant_care_stream(
+    request: PlantCareChatRequest,
+    current_user_id: uuid.UUID = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client),
+    _rate_limit: None = Depends(rate_limit_chat)
+):
+    """
+    RAG 파이프라인을 실행하며 노드별 진행 상황을 Server-Sent Events로 스트리밍합니다.
+    이벤트: progress(단계 안내) → result(최종 답변) / error(오류 안내)
+    """
+    def sse(payload: dict) -> str:
+        return f"data: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+
+    def event_source():
+        try:
+            for event in run_rag_workflow_stream(
+                db_client=db,
+                user_id=str(current_user_id),
+                plant_id=str(request.plantId),
+                care_log_id=str(request.careLogId) if request.careLogId else None,
+                photo_id=str(request.photoId) if request.photoId else None,
+                question=request.question,
+                new_session=request.newSession,
+                response_mode=request.responseMode,
+                recent_messages=[message.model_dump() for message in request.recentMessages],
+                session_id=str(request.sessionId) if request.sessionId else None
+            ):
+                yield sse(event)
+        except ValueError as e:
+            # 파이프라인의 사용자 안내용 검증 오류 (예: 식물 없음)
+            yield sse({"type": "error", "status": 404, "detail": str(e)})
+        except Exception:
+            logger.exception("SSE 상담 스트리밍 중 오류 발생")
+            yield sse({"type": "error", "status": 500, "detail": "식물 상담 RAG 수행 중 오류가 발생했습니다."})
+
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 @router.get("/sessions", response_model=List[ChatSession], summary="상담 세션 목록 조회")
 def list_chat_sessions(

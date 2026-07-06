@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  askPlantCare,
+  askPlantCareStream,
   clearAuthSession,
   createCareLog,
   createPlant,
@@ -9,6 +9,7 @@ import {
   getChatModelInfo,
   getPlant,
   getPlants,
+  getWateringReminders,
   hasAuthSession,
   hasSupabaseAuthConfig,
   isAuthRequiredError,
@@ -29,7 +30,8 @@ import type {
   ChatSession,
   Plant,
   PlantCareChatResponse,
-  PlantCatalogItem
+  PlantCatalogItem,
+  WateringReminder
 } from "./types";
 
 type DesignPage = "login" | "dashboard" | "add" | "detail" | "chat";
@@ -1204,6 +1206,71 @@ function App() {
     doc.body.appendChild(button);
   }
 
+  function renderWateringReminderBanner(doc: Document, reminders: WateringReminder[]) {
+    doc.querySelector("[data-watering-banner]")?.remove();
+    const dueList = reminders.filter((item) => item.status === "due" || item.status === "upcoming");
+    if (!dueList.length) return;
+
+    const plantsSection = Array.from(doc.querySelectorAll("section")).find((section) =>
+      normalizedText(section.querySelector("h2")).includes("내 식물")
+    );
+    if (!plantsSection) return;
+
+    const dueCount = dueList.filter((item) => item.status === "due").length;
+    const names = dueList.slice(0, 3).map((item) =>
+      `${escapeHtml(item.name)}${item.daysSinceWatered != null ? ` (${item.daysSinceWatered}일 경과)` : ""}`
+    ).join(" · ");
+    const suffix = dueList.length > 3 ? ` 외 ${dueList.length - 3}개` : "";
+
+    const banner = doc.createElement("div");
+    banner.dataset.wateringBanner = "true";
+    banner.className =
+      "mb-6 flex items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-growth-light px-5 py-4 shadow-sm animate-fade-in";
+    banner.innerHTML = `<div class="flex items-center gap-3">
+        <span class="material-symbols-outlined text-primary text-[28px]">water_drop</span>
+        <div>
+          <p class="text-label-md font-bold text-on-surface">${
+            dueCount > 0 ? `물 줄 시간이에요! 물주기가 필요한 식물 ${dueCount}개` : "곧 물 줄 식물이 있어요"
+          }</p>
+          <p class="text-label-sm text-on-surface-variant mt-0.5">${names}${suffix}</p>
+        </div>
+      </div>
+      <button class="shrink-0 rounded-full bg-primary text-white px-4 py-2 text-label-md font-bold hover:brightness-95 transition-all" data-watering-log="true">
+        물주기 기록하기
+      </button>`;
+    plantsSection.insertBefore(banner, plantsSection.firstChild);
+
+    banner.querySelector("[data-watering-log]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      const target = dueList[0];
+      if (target?.plantId) setSelectedPlantId(target.plantId);
+      navigate("detail");
+    });
+
+    // 브라우저 알림 (권한이 이미 허용된 경우에만, 세션당 1회)
+    const win = doc.defaultView;
+    if (dueCount > 0 && win && "Notification" in win && win.Notification.permission === "granted") {
+      const NOTIFIED_KEY = "farmhani_watering_notified_date";
+      const today = new Date().toISOString().slice(0, 10);
+      if (localStorage.getItem(NOTIFIED_KEY) !== today) {
+        localStorage.setItem(NOTIFIED_KEY, today);
+        new win.Notification("Farm하니? 물주기 알림", {
+          body: `물주기가 필요한 식물이 ${dueCount}개 있어요. 대시보드에서 확인해보세요.`
+        });
+      }
+    }
+  }
+
+  async function bindWateringReminders(doc: Document) {
+    try {
+      const reminders = await getWateringReminders();
+      renderWateringReminderBanner(doc, reminders);
+    } catch (error) {
+      // 리마인더는 보조 기능 — 실패해도 대시보드 로딩을 막지 않는다
+      console.warn("[Farmhani] watering reminders unavailable:", error);
+    }
+  }
+
   async function bindDashboardData(doc: Document) {
     if (hasSupabaseAuthConfig() && !hasAuthSession()) {
       frameAlert(doc, "로그인 후 내 식물 목록을 불러올 수 있습니다.");
@@ -1222,6 +1289,7 @@ function App() {
       bindDashboardSidebar(doc, plants);
       renderDashboardHealthOverview(doc, plants);
       renderDashboardCareTips(doc, plants);
+      void bindWateringReminders(doc);
     } catch (error) {
       if (!handleApiError(doc, error)) frameAlert(doc, `식물 목록을 불러오지 못했습니다. ${error instanceof Error ? error.message : ""}`);
     }
@@ -1769,12 +1837,22 @@ function App() {
           photoId = photo.id;
         }
 
-        const answer = await askPlantCare(question, plantId, {
-          photoId,
-          newSession,
-          responseMode,
-          recentMessages: localMemory
-        });
+        const progressLabel = loading?.querySelector("p") as HTMLParagraphElement | null;
+        const answer = await askPlantCareStream(
+          question,
+          plantId,
+          {
+            photoId,
+            newSession,
+            responseMode,
+            recentMessages: localMemory
+          },
+          (progress) => {
+            if (progressLabel) {
+              progressLabel.textContent = `${progress.label} (${progress.step}/${progress.total})`;
+            }
+          }
+        );
         forceNewChatSessionRef.current = false;
         setLastSessionId(answer.sessionId);
         if (loading) renderAssistantAnswer(doc, loading, answer);

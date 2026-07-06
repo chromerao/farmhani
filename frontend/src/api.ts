@@ -4,13 +4,15 @@ import type {
   ChatMessage,
   ChatMemoryMessage,
   ChatModelInfo,
+  ChatProgressEvent,
   ChatResponseMode,
   ChatSession,
   Plant,
   PlantCareChatResponse,
   PlantCatalogItem,
   PlantPhoto,
-  UploadSignedUrlResponse
+  UploadSignedUrlResponse,
+  WateringReminder
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -384,6 +386,101 @@ export async function askPlantCare(
       question
     })
   });
+}
+
+export async function askPlantCareStream(
+  question: string,
+  plantId: string,
+  options: {
+    careLogId?: string;
+    photoId?: string;
+    sessionId?: string;
+    newSession?: boolean;
+    responseMode?: ChatResponseMode;
+    recentMessages?: ChatMemoryMessage[];
+  } = {},
+  onProgress?: (progress: ChatProgressEvent) => void
+): Promise<PlantCareChatResponse> {
+  if (!hasSupabaseAuthConfig()) {
+    return mockChatResponse;
+  }
+
+  const token = getAccessToken();
+  if (!token) {
+    throw new AuthRequiredError();
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/chat/plant-care/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      plantId,
+      careLogId: options.careLogId,
+      photoId: options.photoId,
+      sessionId: options.sessionId,
+      newSession: options.newSession ?? false,
+      responseMode: options.responseMode ?? "expert",
+      recentMessages: options.recentMessages ?? [],
+      question
+    })
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new AuthRequiredError("세션이 만료되었거나 로그인이 필요합니다.");
+  }
+  // 구버전 백엔드(스트림 미지원) 등에서는 기존 방식으로 자동 전환
+  if (response.status === 404 || response.status === 405 || !response.body) {
+    return askPlantCare(question, plantId, options);
+  }
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `API request failed: ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary >= 0) {
+      const rawEvent = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      boundary = buffer.indexOf("\n\n");
+
+      const dataLine = rawEvent.split("\n").find((line) => line.startsWith("data: "));
+      if (!dataLine) continue;
+      let payload: { type: string; [key: string]: unknown };
+      try {
+        payload = JSON.parse(dataLine.slice(6));
+      } catch {
+        continue;
+      }
+
+      if (payload.type === "progress" && onProgress) {
+        onProgress(payload as unknown as ChatProgressEvent);
+      } else if (payload.type === "result") {
+        return payload.data as PlantCareChatResponse;
+      } else if (payload.type === "error") {
+        throw new Error(String(payload.detail || "상담 처리 중 오류가 발생했습니다."));
+      }
+    }
+  }
+  throw new Error("상담 응답 스트림이 완료되지 않았습니다.");
+}
+
+export async function getWateringReminders(): Promise<WateringReminder[]> {
+  if (!hasSupabaseAuthConfig()) {
+    return [];
+  }
+  return request<WateringReminder[]>("/api/v1/plants/reminders");
 }
 
 export async function getChatModelInfo(): Promise<ChatModelInfo> {
