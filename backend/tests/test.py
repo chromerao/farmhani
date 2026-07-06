@@ -33,7 +33,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.auth.security import get_current_user
 from app.db.session import get_supabase_client
-from app.services.rag import pipeline
+from app.services.rag import nodes_retrieval, pipeline
 from app.services.rag.vectorstore import SearchResult
 
 
@@ -234,7 +234,7 @@ def test_retrieval_returns_documents(monkeypatch):
         captured["top_k"] = top_k
         return [SearchResult("과습 시 황화가 발생합니다.", {"source_id": "S1", "title": "물관리"}, 0.88)]
 
-    monkeypatch.setattr(pipeline, "search_documents", fake_search)
+    monkeypatch.setattr(nodes_retrieval, "search_documents", fake_search)
 
     state = {
         "question": "몬스테라 잎이 노랗게 변해요",
@@ -261,7 +261,7 @@ def test_retrieval_skipped_for_smalltalk(monkeypatch):
         called["n"] += 1
         return []
 
-    monkeypatch.setattr(pipeline, "search_documents", fake_search)
+    monkeypatch.setattr(nodes_retrieval, "search_documents", fake_search)
     result = pipeline.retrieve_docs({"question": "안녕하세요"})
     assert result["retrieved_docs"] == []
     assert called["n"] == 0  # 스몰토크는 검색 자체를 하지 않음
@@ -568,7 +568,7 @@ def test_e2e_plant_care_flow(monkeypatch, fake_llm):
             )
         ]
 
-    monkeypatch.setattr(pipeline, "search_documents", fake_search)
+    monkeypatch.setattr(nodes_retrieval, "search_documents", fake_search)
 
     db = FakeDB({
         "plants": [{"id": PLANT_ID, "user_id": str(TEST_USER_ID), "name": "몬스테라", "species": "Monstera deliciosa"}],
