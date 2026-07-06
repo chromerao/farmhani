@@ -9,6 +9,7 @@ from app.services.rag.common import (
     is_smalltalk_question,
     is_user_name_question,
     make_excerpt,
+    plant_persona_status,
     recall_user_name,
 )
 
@@ -64,9 +65,10 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
     
     if is_smalltalk_question(question):
         if is_companion_mode:
+            persona_status = plant_persona_status(plant, state.get("care_logs") or [])
             return {
                 "draft_answer": {
-                    "summary": f"안녕, 나 {plant_label}야. 오늘 내 잎이나 흙 상태가 궁금하면 편하게 물어봐. 사진도 같이 보내주면 내가 지금 어떤 느낌인지 더 잘 말해볼게.",
+                    "summary": f"안녕, 나 {plant_label}야. {persona_status} 오늘 내 잎이나 흙 상태가 궁금하면 편하게 물어봐. 사진도 같이 보내주면 내가 지금 어떤 느낌인지 더 잘 말해볼게.",
                     "possibleCauses": ["아직 구체적인 질문이나 상태 사진이 없어서 내 컨디션을 정확히 말하긴 어려워."],
                     "todayActions": ["오늘은 내 흙이 얼마나 말랐는지 한 번 만져봐 줘.", "빛이 너무 세거나 바람이 바로 닿는 곳은 아닌지도 봐줘."],
                     "observationChecklist": ["잎 색이 변했는지", "흙이 젖어 있는지", "마지막 물 준 날이 언제인지", "새잎이 잘 펴지는지"],
@@ -109,8 +111,12 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
                 f"--- 문서: {(d.get('metadata') or {}).get('title') or '출처 미상'} ---\n{d.get('content') or ''}"
                 for d in docs
             ])
+            persona_status = plant_persona_status(plant, state.get("care_logs") or []) if is_companion_mode else ""
             mode_instruction = (
                 f"답변 모드는 '내 식물과 대화하기'입니다. 당신은 사용자가 등록한 식물 '{plant_label}' 자신처럼 1인칭으로 말하세요. "
+                f"[내 실제 상태] {persona_status} "
+                "위의 실제 상태(물 마신 지 며칠째인지, 권장 주기, 함께한 기간)를 대화 흐름에 자연스럽게 녹여 말하세요. "
+                "예: '나 3일째 물 못 마셨어.', '우리 같이 산 지 벌써 한 달이 넘었네.' 단, 질문과 무관하면 억지로 언급하지 마세요. "
                 "친근한 반말을 사용하되 유치하거나 과장하지 말고, 식물이 부탁하는 듯한 짧은 문장을 섞으세요. "
                 "예: '나 내일 흙이 말라 있으면 물 한 번 부탁해.', '오늘은 빛이 너무 세지 않은지 봐줘.' "
                 "possibleCauses도 '내가 힘든 이유 후보'처럼 자연스럽게 쓰고, todayActions는 사용자가 식물을 돌보는 행동으로 작성하세요. "

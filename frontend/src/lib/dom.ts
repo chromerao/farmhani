@@ -84,6 +84,67 @@ export function findPlantGrid(doc: Document) {
 }
 
 
+export function showFormModal(
+  doc: Document,
+  options: {
+    title: string;
+    description: string;
+    submitLabel: string;
+    fields: { key: string; label: string; value?: string; placeholder?: string; required?: boolean }[];
+  },
+  onSubmit: (values: Record<string, string>) => void
+) {
+  doc.querySelector("[data-app-modal]")?.remove();
+  const overlay = doc.createElement("div");
+  overlay.dataset.appModal = "true";
+  overlay.className = "fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4";
+  overlay.innerHTML = `<div class="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/20 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+    <div>
+      <p class="text-label-sm font-bold text-primary uppercase tracking-wide">Farm하니 기록</p>
+      <h3 class="text-headline-md font-bold text-on-surface mt-1">${escapeHtml(options.title)}</h3>
+      <p class="text-body-md text-on-surface-variant mt-2">${escapeHtml(options.description)}</p>
+    </div>
+    <div class="space-y-3">
+      ${options.fields
+        .map(
+          (field) => `<label class="block">
+        <span class="text-label-sm font-bold text-on-surface-variant">${escapeHtml(field.label)}${field.required ? ' <span class="text-diagnostic-red">*</span>' : ""}</span>
+        <input type="text" data-form-field="${escapeHtml(field.key)}" value="${escapeHtml(field.value ?? "")}" placeholder="${escapeHtml(field.placeholder ?? "")}"
+          class="mt-1 w-full rounded-xl bg-surface-container border border-outline-variant/20 focus:ring-2 focus:ring-primary p-3 text-body-md" />
+      </label>`
+        )
+        .join("")}
+    </div>
+    <div class="flex justify-end gap-2">
+      <button class="px-4 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container" data-modal-cancel="true">취소</button>
+      <button class="px-5 py-2 rounded-lg bg-primary text-white font-bold shadow-sm" data-modal-submit="true">${escapeHtml(options.submitLabel)}</button>
+    </div>
+  </div>`;
+  doc.body.appendChild(overlay);
+  const firstInput = overlay.querySelector("input[data-form-field]") as HTMLInputElement | null;
+  firstInput?.focus();
+  overlay.querySelector("[data-modal-cancel]")?.addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) overlay.remove();
+  });
+  overlay.querySelector("[data-modal-submit]")?.addEventListener("click", () => {
+    const values: Record<string, string> = {};
+    let missingRequired = false;
+    options.fields.forEach((field) => {
+      const input = overlay.querySelector(`input[data-form-field="${field.key}"]`) as HTMLInputElement | null;
+      const value = input?.value.trim() ?? "";
+      values[field.key] = value;
+      if (field.required && !value) {
+        missingRequired = true;
+        input?.focus();
+      }
+    });
+    if (missingRequired) return;
+    overlay.remove();
+    onSubmit(values);
+  });
+}
+
 export function showTextInputModal(
   doc: Document,
   options: { title: string; description: string; placeholder: string; submitLabel: string },

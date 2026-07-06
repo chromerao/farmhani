@@ -7,6 +7,7 @@ import type {
   ChatProgressEvent,
   ChatResponseMode,
   ChatSession,
+  ChecklistTask,
   Plant,
   PlantCareChatResponse,
   PlantCatalogItem,
@@ -481,6 +482,13 @@ export async function getWateringReminders(): Promise<WateringReminder[]> {
     return [];
   }
   return request<WateringReminder[]>("/api/v1/plants/reminders");
+}
+
+export async function getTodayChecklist(): Promise<ChecklistTask[]> {
+  if (!hasSupabaseAuthConfig()) {
+    return [];
+  }
+  return request<ChecklistTask[]>("/api/v1/plants/checklist");
 }
 
 export async function getChatModelInfo(): Promise<ChatModelInfo> {

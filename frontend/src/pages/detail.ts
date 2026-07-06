@@ -1,11 +1,14 @@
-import { createCareLog, getPlant, hasAuthSession, hasSupabaseAuthConfig, storagePathToPublicUrl, uploadPlantPhoto } from "../api";
-import { createHiddenFileInput, escapeHtml, frameAlert, normalizedText, showTextInputModal } from "../lib/dom";
+import { createCareLog, getPlant, hasAuthSession, hasSupabaseAuthConfig, storagePathToPublicUrl, updatePlant, uploadPlantPhoto } from "../api";
+import type { Plant } from "../types";
+import { createHiddenFileInput, escapeHtml, frameAlert, normalizedText, showFormModal, showTextInputModal } from "../lib/dom";
 import { formatDate, todayDateInput } from "../lib/format";
 import { getSelectedPlantId } from "../lib/storage";
 import type { AppContext, DashboardPlantCategory } from "./context";
 
 export function createDetailPage(ctx: AppContext) {
   const { navigate, handleApiError, removePlant } = ctx;
+  // 편집 모달 프리필용 — bindDetailData가 마지막으로 불러온 식물 정보
+  let currentPlant: Plant | null = null;
 
   function bindDetailSidebar(doc: Document) {
     const items = Array.from(doc.querySelectorAll("aside nav > div")) as HTMLElement[];
@@ -96,6 +99,61 @@ export function createDetailPage(ctx: AppContext) {
     }
   }
 
+  function bindDetailEditButton(doc: Document) {
+    if (doc.querySelector("[data-detail-edit-plant]")) return;
+    const button = doc.createElement("button");
+    button.type = "button";
+    button.dataset.detailEditPlant = "true";
+    button.className =
+      "fixed right-6 bottom-20 z-50 inline-flex items-center gap-2 rounded-full bg-primary text-white px-4 py-3 text-label-md font-bold shadow-lg hover:brightness-95 transition-all";
+    button.innerHTML = '<span class="material-symbols-outlined text-[18px]">edit</span>정보 수정';
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const plantId = getSelectedPlantId();
+      if (!plantId) return;
+      let plant = currentPlant && currentPlant.id === plantId ? currentPlant : null;
+      if (!plant) {
+        try {
+          plant = await getPlant(plantId);
+          currentPlant = plant;
+        } catch (error) {
+          if (!handleApiError(doc, error)) frameAlert(doc, "식물 정보를 불러오지 못했습니다.");
+          return;
+        }
+      }
+      showFormModal(
+        doc,
+        {
+          title: "식물 정보 수정",
+          description: "별명, 품종, 위치, 햇빛 환경을 최신 상태로 바꾸면 물주기 추천과 상담 정확도가 함께 올라갑니다.",
+          submitLabel: "저장",
+          fields: [
+            { key: "name", label: "별명", value: plant.name, placeholder: "예: 초록이", required: true },
+            { key: "species", label: "품종", value: plant.species ?? "", placeholder: "예: 몬스테라 델리시오사" },
+            { key: "location", label: "키우는 위치", value: plant.location ?? "", placeholder: "예: 거실 창가" },
+            { key: "sunlight", label: "햇빛 환경", value: plant.sunlight ?? "", placeholder: "예: 오전 직사광선" }
+          ]
+        },
+        async (values) => {
+          try {
+            await updatePlant(plantId, {
+              name: values.name,
+              species: values.species,
+              location: values.location,
+              sunlight: values.sunlight
+            });
+            currentPlant = null;
+            frameAlert(doc, "식물 정보를 수정했습니다.");
+            bindDetailData(doc);
+          } catch (error) {
+            if (!handleApiError(doc, error)) frameAlert(doc, "식물 정보 수정에 실패했습니다.");
+          }
+        }
+      );
+    });
+    doc.body.appendChild(button);
+  }
+
   function bindDetailDeleteButton(doc: Document) {
     if (doc.querySelector("[data-detail-delete-plant]")) return;
     const button = doc.createElement("button");
@@ -118,6 +176,7 @@ export function createDetailPage(ctx: AppContext) {
 
     void getPlant(plantId)
       .then((plant) => {
+        currentPlant = plant;
         const heroName = doc.querySelector("h1");
         const heroSpecies = heroName?.nextElementSibling;
         const primaryImage = plant.imageUrl || storagePathToPublicUrl(plant.photos?.[0]?.storagePath);
@@ -314,5 +373,5 @@ export function createDetailPage(ctx: AppContext) {
     });
   }
 
-  return { bindDetailData, bindDetailSidebar, renderDetailCollectionSidebar, bindQuickCareButtons, bindDetailDeleteButton };
+  return { bindDetailData, bindDetailSidebar, renderDetailCollectionSidebar, bindQuickCareButtons, bindDetailEditButton, bindDetailDeleteButton };
 }

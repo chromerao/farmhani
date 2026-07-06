@@ -148,6 +148,7 @@ function App() {
       detailPage.bindDetailSidebar(doc);
       detailPage.renderDetailCollectionSidebar(doc);
       detailPage.bindQuickCareButtons(doc);
+      detailPage.bindDetailEditButton(doc);
       detailPage.bindDetailDeleteButton(doc);
     }
     if (page === "chat") {

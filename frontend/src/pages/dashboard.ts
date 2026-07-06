@@ -1,7 +1,7 @@
-import { createCareLog, getPlants, getWateringReminders, hasAuthSession, hasSupabaseAuthConfig } from "../api";
-import type { Plant, WateringReminder } from "../types";
+import { createCareLog, getPlants, getTodayChecklist, hasAuthSession, hasSupabaseAuthConfig } from "../api";
+import type { ChecklistTask, Plant } from "../types";
 import { PENDING_DIAGNOSIS_QUESTION_KEY } from "../lib/constants";
-import { createHiddenFileInput, escapeHtml, findPlantGrid, frameAlert, normalizedText } from "../lib/dom";
+import { createHiddenFileInput, escapeHtml, findPlantGrid, frameAlert, normalizedText, showTextInputModal } from "../lib/dom";
 import { todayDateInput } from "../lib/format";
 import { clearLastSessionId, getSelectedPlantId, setSelectedPlantId } from "../lib/storage";
 import { addPlantCardHtml, plantCardHtml } from "../lib/plantCards";
@@ -353,68 +353,134 @@ export function createDashboardPage(ctx: AppContext) {
     });
   }
 
-  function renderWateringReminderBanner(doc: Document, reminders: WateringReminder[]) {
-    doc.querySelector("[data-watering-banner]")?.remove();
-    const dueList = reminders.filter((item) => item.status === "due" || item.status === "upcoming");
-    if (!dueList.length) return;
+  function checklistTaskIcon(task: ChecklistTask) {
+    if (task.taskType === "water") return "water_drop";
+    if (task.taskType === "observe") return "edit_note";
+    return "photo_camera";
+  }
+
+  function renderTodayChecklist(doc: Document, tasks: ChecklistTask[]) {
+    doc.querySelector("[data-today-checklist]")?.remove();
+    if (!tasks.length) return;
 
     const plantsSection = Array.from(doc.querySelectorAll("section")).find((section) =>
       normalizedText(section.querySelector("h2")).includes("내 식물")
     );
     if (!plantsSection) return;
 
-    const dueCount = dueList.filter((item) => item.status === "due").length;
-    const names = dueList.slice(0, 3).map((item) =>
-      `${escapeHtml(item.name)}${item.daysSinceWatered != null ? ` (${item.daysSinceWatered}일 경과)` : ""}`
-    ).join(" · ");
-    const suffix = dueList.length > 3 ? ` 외 ${dueList.length - 3}개` : "";
+    const doneCount = tasks.filter((task) => task.done).length;
+    const allDone = doneCount === tasks.length;
 
-    const banner = doc.createElement("div");
-    banner.dataset.wateringBanner = "true";
-    banner.className =
-      "mb-6 flex items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-growth-light px-5 py-4 shadow-sm animate-fade-in";
-    banner.innerHTML = `<div class="flex items-center gap-3">
-        <span class="material-symbols-outlined text-primary text-[28px]">water_drop</span>
-        <div>
-          <p class="text-label-md font-bold text-on-surface">${
-            dueCount > 0 ? `물 줄 시간이에요! 물주기가 필요한 식물 ${dueCount}개` : "곧 물 줄 식물이 있어요"
-          }</p>
-          <p class="text-label-sm text-on-surface-variant mt-0.5">${names}${suffix}</p>
+    const card = doc.createElement("div");
+    card.dataset.todayChecklist = "true";
+    card.className = "mb-6 rounded-2xl border border-primary/20 bg-white px-5 py-4 shadow-sm animate-fade-in";
+    card.innerHTML = `<div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary">checklist</span>
+          <h3 class="text-headline-sm font-bold text-on-surface">오늘의 체크리스트</h3>
         </div>
+        <span class="text-label-sm font-bold ${allDone ? "text-primary" : "text-on-surface-variant"}">${doneCount}/${tasks.length} 완료${allDone ? " 🎉" : ""}</span>
       </div>
-      <button class="shrink-0 rounded-full bg-primary text-white px-4 py-2 text-label-md font-bold hover:brightness-95 transition-all" data-watering-log="true">
-        물주기 기록하기
-      </button>`;
-    plantsSection.insertBefore(banner, plantsSection.firstChild);
+      <div class="space-y-1">
+        ${tasks
+          .map(
+            (task) => `<button class="w-full text-left flex items-center gap-3 p-2.5 rounded-xl transition-all ${
+              task.done ? "opacity-60" : "hover:bg-growth-light"
+            }" data-checklist-task="${escapeHtml(task.id)}">
+              <span class="shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                task.done ? "bg-primary border-primary text-white" : "border-outline-variant/60 text-transparent"
+              }"><span class="material-symbols-outlined text-[16px]">check</span></span>
+              <span class="material-symbols-outlined text-primary text-[20px] shrink-0">${checklistTaskIcon(task)}</span>
+              <span class="min-w-0">
+                <span class="block text-label-md font-bold text-on-surface ${task.done ? "line-through" : ""}">${escapeHtml(task.title)}</span>
+                <span class="block text-label-sm text-on-surface-variant truncate">${escapeHtml(task.description)}</span>
+              </span>
+            </button>`
+          )
+          .join("")}
+      </div>`;
+    plantsSection.insertBefore(card, plantsSection.firstChild);
 
-    banner.querySelector("[data-watering-log]")?.addEventListener("click", (event) => {
-      event.preventDefault();
-      const target = dueList[0];
-      if (target?.plantId) setSelectedPlantId(target.plantId);
-      navigate("detail");
+    card.querySelectorAll("[data-checklist-task]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        const taskId = (button as HTMLElement).dataset.checklistTask;
+        const task = tasks.find((item) => item.id === taskId);
+        if (!task || task.done) return;
+
+        if (task.taskType === "water") {
+          void (async () => {
+            try {
+              await createCareLog(task.plantId, {
+                wateredAt: todayDateInput(),
+                leafCondition: "오늘의 체크리스트에서 물주기를 기록함",
+                soilCondition: "미기록",
+                memo: "오늘의 체크리스트"
+              });
+              frameAlert(doc, `${task.plantName} 물주기 기록을 저장했습니다.`);
+              void bindTodayChecklist(doc);
+            } catch (error) {
+              if (!handleApiError(doc, error)) frameAlert(doc, "물주기 기록 저장에 실패했습니다.");
+            }
+          })();
+          return;
+        }
+
+        if (task.taskType === "observe") {
+          showTextInputModal(
+            doc,
+            {
+              title: `${task.plantName} 상태 기록`,
+              description: "오늘 보이는 잎, 줄기, 흙 상태를 짧게 남기면 다음 상담에서 함께 참고합니다.",
+              placeholder: "예: 새잎은 잘 펴졌고 흙은 아직 촉촉해요.",
+              submitLabel: "기록 저장"
+            },
+            async (memo) => {
+              try {
+                await createCareLog(task.plantId, {
+                  wateredAt: undefined,
+                  leafCondition: memo,
+                  soilCondition: "미기록",
+                  memo: "오늘의 체크리스트 상태 기록"
+                });
+                frameAlert(doc, `${task.plantName} 상태 기록을 저장했습니다.`);
+                void bindTodayChecklist(doc);
+              } catch (error) {
+                if (!handleApiError(doc, error)) frameAlert(doc, "상태 기록 저장에 실패했습니다.");
+              }
+            }
+          );
+          return;
+        }
+
+        // photo: 상세 페이지의 사진 업로드 플로우로 이동
+        setSelectedPlantId(task.plantId);
+        navigate("detail");
+      });
     });
 
-    // 브라우저 알림 (권한이 이미 허용된 경우에만, 세션당 1회)
+    // 브라우저 알림 (권한이 이미 허용된 경우에만, 하루 1회) — 물주기가 밀린 식물 기준
+    const dueWaterCount = tasks.filter((task) => task.taskType === "water" && !task.done).length;
     const win = doc.defaultView;
-    if (dueCount > 0 && win && "Notification" in win && win.Notification.permission === "granted") {
+    if (dueWaterCount > 0 && win && "Notification" in win && win.Notification.permission === "granted") {
       const NOTIFIED_KEY = "farmhani_watering_notified_date";
       const today = new Date().toISOString().slice(0, 10);
       if (localStorage.getItem(NOTIFIED_KEY) !== today) {
         localStorage.setItem(NOTIFIED_KEY, today);
         new win.Notification("Farm하니? 물주기 알림", {
-          body: `물주기가 필요한 식물이 ${dueCount}개 있어요. 대시보드에서 확인해보세요.`
+          body: `물주기가 필요한 식물이 ${dueWaterCount}개 있어요. 오늘의 체크리스트를 확인해보세요.`
         });
       }
     }
   }
 
-  async function bindWateringReminders(doc: Document) {
+  async function bindTodayChecklist(doc: Document) {
     try {
-      const reminders = await getWateringReminders();
-      renderWateringReminderBanner(doc, reminders);
+      const tasks = await getTodayChecklist();
+      renderTodayChecklist(doc, tasks);
     } catch (error) {
-      // 리마인더는 보조 기능 — 실패해도 대시보드 로딩을 막지 않는다
-      console.warn("[Farmhani] watering reminders unavailable:", error);
+      // 체크리스트는 보조 기능 — 실패해도 대시보드 로딩을 막지 않는다
+      console.warn("[Farmhani] today checklist unavailable:", error);
     }
   }
 
@@ -436,7 +502,7 @@ export function createDashboardPage(ctx: AppContext) {
       bindDashboardSidebar(doc, plants);
       renderDashboardHealthOverview(doc, plants);
       renderDashboardCareTips(doc, plants);
-      void bindWateringReminders(doc);
+      void bindTodayChecklist(doc);
     } catch (error) {
       if (!handleApiError(doc, error)) frameAlert(doc, `식물 목록을 불러오지 못했습니다. ${error instanceof Error ? error.message : ""}`);
     }

@@ -1,8 +1,56 @@
 """RAG 파이프라인 공용 헬퍼 및 상태 정의."""
 import re
+from datetime import date, datetime, timezone
 from typing import Dict, Any, List, Optional, TypedDict
 
 from supabase import Client
+
+
+def plant_persona_status(plant: Dict[str, Any], care_logs: List[Dict[str, Any]]) -> str:
+    """
+    companion(내 식물과 대화하기) 모드에서 식물이 1인칭으로 말할 수 있는
+    실제 케어 상태 요약을 만든다. 예: "나 8일째 물 못 마셨어. 권장 주기 7일이 지났어."
+    """
+    from app.services.rag.plant_terms import watering_interval_days
+
+    today = datetime.now(timezone.utc).date()
+    lines: List[str] = []
+
+    # 마지막 물주기 경과 vs 권장 주기
+    interval = watering_interval_days(plant.get("name"), plant.get("species"))
+    watered_dates = []
+    for log in care_logs or []:
+        raw = log.get("watered_at")
+        if raw:
+            try:
+                watered_dates.append(date.fromisoformat(str(raw)[:10]))
+            except ValueError:
+                continue
+    if watered_dates:
+        days_since = (today - max(watered_dates)).days
+        if days_since <= 0:
+            lines.append(f"오늘 물을 마셨어. 권장 주기는 {interval}일이야.")
+        elif days_since >= interval:
+            lines.append(f"물 마신 지 {days_since}일째야. 권장 주기 {interval}일이 지나서 목이 마른 상태야.")
+        elif interval - days_since <= 1:
+            lines.append(f"물 마신 지 {days_since}일 됐어. 권장 주기가 {interval}일이라 내일쯤 물이 필요해.")
+        else:
+            lines.append(f"물 마신 지 {days_since}일 됐고 권장 주기는 {interval}일이라 아직 괜찮아.")
+    else:
+        lines.append(f"아직 물 준 기록이 없어서 내 물 컨디션은 정확히 몰라. 권장 주기는 {interval}일이야.")
+
+    # 함께한 기간
+    created_raw = plant.get("created_at")
+    if created_raw:
+        try:
+            adopted = date.fromisoformat(str(created_raw)[:10])
+            days_together = (today - adopted).days
+            if days_together >= 1:
+                lines.append(f"주인님과 함께한 지 {days_together}일째야.")
+        except ValueError:
+            pass
+
+    return " ".join(lines)
 
 
 def make_excerpt(text: str, max_len: int = 220) -> str:

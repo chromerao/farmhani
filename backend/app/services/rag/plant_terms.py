@@ -150,3 +150,32 @@ def find_catalog_watering_interval(name: str | None, species: str | None) -> int
         if catalog_species and catalog_species in haystack:
             return interval
     return None
+
+
+# 종 그룹별 권장 물주기 간격 (일). 이름/품종 문자열 키워드 매칭 — 먼저 매칭되는 규칙 우선.
+DEFAULT_WATERING_INTERVAL_DAYS = 7
+WATERING_INTERVAL_RULES: list = [
+    # 다육·선인장류: 건조에 강함
+    (14, ("선인장", "다육", "스투키", "산세베리아", "산세비에리아", "금전수", "알로에",
+          "틸란드시아", "리톱스", "세덤", "에케베리아", "cactus", "sansevieria",
+          "dracaena", "zamioculcas", "aloe", "succulent")),
+    # 허브·채소류: 물 소모가 빠름
+    (3, ("바질", "민트", "고수", "루꼴라", "상추", "깻잎", "시금치", "부추",
+         "토마토", "방울토마토", "오이", "고추", "파프리카", "딸기", "가지",
+         "basil", "mint", "lettuce", "tomato", "cucumber", "strawberry")),
+]
+
+
+def watering_interval_days(name: str | None, species: str | None) -> int:
+    """도감 매칭 → 키워드 규칙 → 기본값 순으로 권장 물주기 간격(일)을 결정한다."""
+    try:
+        catalog_interval = find_catalog_watering_interval(name, species)
+        if catalog_interval:
+            return catalog_interval
+    except Exception:
+        logger.warning("도감 물주기 간격 조회 실패, 키워드 규칙 사용", exc_info=True)
+    haystack = f"{name or ''} {species or ''}".lower()
+    for days, keywords in WATERING_INTERVAL_RULES:
+        if any(keyword in haystack for keyword in keywords):
+            return days
+    return DEFAULT_WATERING_INTERVAL_DAYS

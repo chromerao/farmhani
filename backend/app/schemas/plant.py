@@ -36,6 +36,15 @@ class PlantDetail(Plant):
     careLogs: List[CareLog] = Field(default_factory=list, description="식물 재배 일지 목록")
     photos: List[PlantPhoto] = Field(default_factory=list, description="식물 사진 히스토리 목록")
 
+class ChecklistTask(BaseModel):
+    id: str = Field(..., description="합성 태스크 ID (taskType:plantId)")
+    plantId: UUID = Field(..., description="식물 UUID")
+    plantName: str = Field(..., description="식물 이름")
+    taskType: str = Field(..., description="water(물주기) | observe(상태 기록) | photo(성장 사진)")
+    title: str = Field(..., description="체크리스트 항목 제목")
+    description: str = Field(..., description="항목 보조 설명")
+    done: bool = Field(..., description="오늘 완료 여부")
+
 class WateringReminder(BaseModel):
     plantId: UUID = Field(..., description="식물 UUID")
     name: str = Field(..., description="식물 이름")
