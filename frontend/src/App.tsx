@@ -34,254 +34,42 @@ import type {
   WateringReminder
 } from "./types";
 
-type DesignPage = "login" | "dashboard" | "add" | "detail" | "chat";
 
-const pageSources: Record<DesignPage, string> = {
-  login: "/design/Login.html",
-  dashboard: "/design/dashboard.html",
-  add: "/design/add_my_plant.html",
-  detail: "/design/my_plant_information.html",
-  chat: "/design/AI_chatpage.html"
-};
-
-const hashToPage: Record<string, DesignPage> = {
-  "#login": "login",
-  "#dashboard": "dashboard",
-  "#add": "add",
-  "#detail": "detail",
-  "#chat": "chat"
-};
-
-const SELECTED_PLANT_ID_KEY = "farmhani_selected_plant_id";
-const LAST_SESSION_ID_KEY = "farmhani_last_session_id";
-const PENDING_DIAGNOSIS_QUESTION_KEY = "farmhani_pending_diagnosis_question";
-const CHAT_RESPONSE_MODE_KEY = "farmhani_chat_response_mode";
-const CHAT_MEMORY_KEY = "farmhani_chat_memory";
-const USER_PROFILE_PHOTO_KEY = "farmhani_user_profile_photo";
-
-const defaultPlantImages = [
-  "https://images.unsplash.com/photo-1614594975525-e45190c55d0b?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1598880940080-ff9a29891b85?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1622205313162-be1d5712a43d?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1521334884684-d80222895322?auto=format&fit=crop&w=1200&q=80"
-];
-
-function getInitialPage(): DesignPage {
-  return hashToPage[window.location.hash] ?? "login";
-}
-
-function normalizedText(element: Element | null) {
-  return (element?.textContent ?? "").replace(/\s+/g, " ").trim();
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function frameAlert(doc: Document, message: string) {
-  doc.defaultView?.alert(message);
-}
-
-function setSelectedPlantId(plantId: string) {
-  localStorage.setItem(SELECTED_PLANT_ID_KEY, plantId);
-}
-
-function getSelectedPlantId() {
-  return localStorage.getItem(SELECTED_PLANT_ID_KEY);
-}
-
-function setLastSessionId(sessionId?: string) {
-  if (sessionId) localStorage.setItem(getLastSessionStorageKey(), sessionId);
-}
-
-function getStoredChatResponseMode(): ChatResponseMode {
-  const value = localStorage.getItem(CHAT_RESPONSE_MODE_KEY);
-  return value === "companion" ? "companion" : "expert";
-}
-
-function getLastSessionStorageKey(plantId = getSelectedPlantId(), mode = getStoredChatResponseMode()) {
-  return `${LAST_SESSION_ID_KEY}:${plantId || "none"}:${mode}`;
-}
-
-function getLastSessionId(plantId = getSelectedPlantId(), mode = getStoredChatResponseMode()) {
-  return localStorage.getItem(getLastSessionStorageKey(plantId, mode));
-}
-
-function clearLastSessionId(plantId = getSelectedPlantId(), mode = getStoredChatResponseMode()) {
-  localStorage.removeItem(getLastSessionStorageKey(plantId, mode));
-}
-
-function getChatMemoryStorageKey(plantId = getSelectedPlantId(), mode = getStoredChatResponseMode()) {
-  return `${CHAT_MEMORY_KEY}:${plantId || "none"}:${mode}`;
-}
-
-function loadLocalChatMemory(plantId = getSelectedPlantId(), mode = getStoredChatResponseMode()): ChatMemoryMessage[] {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(getChatMemoryStorageKey(plantId, mode)) || "[]") as ChatMemoryMessage[];
-    return parsed
-      .filter((item) => (item.role === "user" || item.role === "assistant") && item.content?.trim())
-      .slice(-12);
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalChatMemory(plantId: string, mode: ChatResponseMode, messages: ChatMemoryMessage[]) {
-  localStorage.setItem(getChatMemoryStorageKey(plantId, mode), JSON.stringify(messages.slice(-12)));
-}
-
-function appendLocalChatMemory(plantId: string, mode: ChatResponseMode, ...messages: ChatMemoryMessage[]) {
-  const next = [...loadLocalChatMemory(plantId, mode), ...messages].filter((item) => item.content.trim()).slice(-12);
-  saveLocalChatMemory(plantId, mode, next);
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return "기록 없음";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
-}
-
-function todayDateInput() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function daysAgoDateInput(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date.toISOString().slice(0, 10);
-}
-
-function createHiddenFileInput(doc: Document) {
-  const input = doc.createElement("input");
-  input.type = "file";
-  input.accept = "image/png,image/jpeg,image/webp";
-  input.style.display = "none";
-  doc.body.appendChild(input);
-  return input;
-}
-
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
-function getUserProfilePhoto() {
-  return localStorage.getItem(USER_PROFILE_PHOTO_KEY) || "";
-}
-
-function setUserProfilePhoto(value: string) {
-  if (value) localStorage.setItem(USER_PROFILE_PHOTO_KEY, value);
-}
-
-function removeCategoryAddButtons(doc: Document) {
-  doc.querySelectorAll("button").forEach((button) => {
-    const text = normalizedText(button);
-    if (text.includes("카테고리 추가") || text.includes("새 카테고리")) {
-      button.remove();
-    }
-  });
-}
-
-function removeChatConfidence(doc: Document) {
-  Array.from(doc.querySelectorAll("p, span")).forEach((element) => {
-    const text = normalizedText(element);
-    if (text.includes("분석 확신도") || (text.includes("87%") && text.includes("확신"))) {
-      element.remove();
-    }
-  });
-}
-
-function simplifyDashboardViewButtons(doc: Document) {
-  const listButton = Array.from(doc.querySelectorAll("button")).find((button) => normalizedText(button).includes("view_list"));
-  listButton?.remove();
-
-  const gridButton = Array.from(doc.querySelectorAll("button")).find((button) => normalizedText(button).includes("grid_view")) as HTMLElement | undefined;
-  if (!gridButton || gridButton.dataset.viewButtonsSimplified === "true") return;
-  gridButton.dataset.viewButtonsSimplified = "true";
-  gridButton.setAttribute("title", "카드 보기");
-  gridButton.addEventListener("click", (event) => {
-    event.preventDefault();
-  });
-}
-
-function removeAddPhotoSkipButton(doc: Document) {
-  doc.getElementById("skip-btn")?.remove();
-}
-
-function findPlantGrid(doc: Document) {
-  const plantSection = Array.from(doc.querySelectorAll("section")).find((section) => {
-    const heading = section.querySelector("h2");
-    return normalizedText(heading).includes("내 식물");
-  });
-  const preciseGrid = plantSection?.querySelector(".grid");
-  if (preciseGrid) return preciseGrid as HTMLElement;
-
-  return Array.from(doc.querySelectorAll(".grid")).find((element) => {
-    const text = normalizedText(element);
-    return text.includes("새 식물 추가") && (text.includes("몬스테라") || text.includes("내 식물"));
-  }) as HTMLElement | undefined;
-}
-
-function plantCardHtml(plant: Plant, index: number) {
-  const image = plant.imageUrl;
-  const status = plant.healthScore && plant.healthScore < 70 ? "주의 필요" : "건강함";
-  const badgeClass =
-    status === "주의 필요"
-      ? "bg-diagnostic-red/10 border border-diagnostic-red/20 text-diagnostic-red"
-      : "bg-white/80 text-primary";
-
-  return `<div class="bg-surface-container-lowest rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all group cursor-pointer border border-outline-variant/10" data-plant-card="${escapeHtml(plant.id)}">
-    <div class="relative h-48 overflow-hidden">
-      ${
-        image
-          ? `<img alt="${escapeHtml(plant.name)} 식물 사진" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" src="${escapeHtml(image)}">`
-          : `<div class="w-full h-full bg-surface-container flex flex-col items-center justify-center text-on-surface-variant">
-              <span class="material-symbols-outlined text-4xl mb-2">hide_image</span>
-              <span class="text-label-md font-bold">사진 등록안함</span>
-            </div>`
-      }
-      <div class="absolute top-4 right-4 ${badgeClass} backdrop-blur-md px-3 py-1 rounded-full text-label-sm font-bold flex items-center gap-1">
-        <span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">${status === "주의 필요" ? "warning" : "check_circle"}</span>
-        ${status}
-      </div>
-    </div>
-    <div class="p-6">
-      <h3 class="text-headline-sm font-headline-md mb-1">${escapeHtml(plant.name)}</h3>
-      <p class="text-label-sm text-on-surface-variant mb-4">${escapeHtml(plant.species || "품종 미지정")} · ${escapeHtml(plant.location || "위치 미지정")}</p>
-      <div class="flex items-center justify-between border-t border-outline-variant/10 pt-4">
-        <div class="flex flex-col">
-          <span class="text-[10px] uppercase tracking-wider text-outline">등록일</span>
-          <span class="text-label-md font-medium">${formatDate(plant.createdAt)}</span>
-          <span class="text-[10px] uppercase tracking-wider text-tertiary mt-2">다음 관리</span>
-          <span class="text-label-sm font-medium text-tertiary">${escapeHtml(plant.nextTask || "관찰 기록 대기")}</span>
-        </div>
-        <button class="w-10 h-10 rounded-full bg-growth-light text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-all" data-water-plant="${escapeHtml(plant.id)}" title="오늘 물주기 기록">
-          <span class="material-symbols-outlined">water_drop</span>
-        </button>
-      </div>
-    </div>
-  </div>`;
-}
-
-function addPlantCardHtml() {
-  return `<div class="border-2 border-dashed border-outline-variant rounded-3xl flex flex-col items-center justify-center p-6 hover:bg-surface-container-low transition-all cursor-pointer group" data-add-plant="true">
-    <div class="w-16 h-16 rounded-full bg-growth-light flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-      <span class="material-symbols-outlined text-primary text-3xl">add</span>
-    </div>
-    <p class="text-headline-sm font-headline-md text-tertiary">새 식물 추가</p>
-    <p class="text-label-sm text-on-surface-variant text-center mt-2">나만의 정원을 넓혀보세요</p>
-  </div>`;
-}
+import type { DesignPage } from "./lib/constants";
+import {
+  CHAT_RESPONSE_MODE_KEY,
+  PENDING_DIAGNOSIS_QUESTION_KEY,
+  SELECTED_PLANT_ID_KEY,
+  getInitialPage,
+  pageSources
+} from "./lib/constants";
+import {
+  createHiddenFileInput,
+  escapeHtml,
+  fileToDataUrl,
+  findPlantGrid,
+  frameAlert,
+  normalizedText,
+  removeAddPhotoSkipButton,
+  removeCategoryAddButtons,
+  removeChatConfidence,
+  simplifyDashboardViewButtons
+} from "./lib/dom";
+import { daysAgoDateInput, formatDate, todayDateInput } from "./lib/format";
+import {
+  appendLocalChatMemory,
+  clearLastSessionId,
+  getLastSessionId,
+  getSelectedPlantId,
+  getStoredChatResponseMode,
+  getUserProfilePhoto,
+  loadLocalChatMemory,
+  saveLocalChatMemory,
+  setLastSessionId,
+  setSelectedPlantId,
+  setUserProfilePhoto
+} from "./lib/storage";
+import { addPlantCardHtml, plantCardHtml } from "./lib/plantCards";
 
 function App() {
   const [page, setPage] = useState<DesignPage>(getInitialPage);

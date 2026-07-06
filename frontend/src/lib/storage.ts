@@ -1,0 +1,70 @@
+// 선택 식물/세션/채팅 메모리/프로필 사진 로컬스토리지 유틸리티
+import type { ChatMemoryMessage, ChatResponseMode } from "../types";
+import {
+  CHAT_MEMORY_KEY,
+  CHAT_RESPONSE_MODE_KEY,
+  LAST_SESSION_ID_KEY,
+  SELECTED_PLANT_ID_KEY,
+  USER_PROFILE_PHOTO_KEY
+} from "./constants";
+
+export function setSelectedPlantId(plantId: string) {
+  localStorage.setItem(SELECTED_PLANT_ID_KEY, plantId);
+}
+
+export function getSelectedPlantId() {
+  return localStorage.getItem(SELECTED_PLANT_ID_KEY);
+}
+
+export function setLastSessionId(sessionId?: string) {
+  if (sessionId) localStorage.setItem(getLastSessionStorageKey(), sessionId);
+}
+
+export function getStoredChatResponseMode(): ChatResponseMode {
+  const value = localStorage.getItem(CHAT_RESPONSE_MODE_KEY);
+  return value === "companion" ? "companion" : "expert";
+}
+
+export function getLastSessionStorageKey(plantId = getSelectedPlantId(), mode = getStoredChatResponseMode()) {
+  return `${LAST_SESSION_ID_KEY}:${plantId || "none"}:${mode}`;
+}
+
+export function getLastSessionId(plantId = getSelectedPlantId(), mode = getStoredChatResponseMode()) {
+  return localStorage.getItem(getLastSessionStorageKey(plantId, mode));
+}
+
+export function clearLastSessionId(plantId = getSelectedPlantId(), mode = getStoredChatResponseMode()) {
+  localStorage.removeItem(getLastSessionStorageKey(plantId, mode));
+}
+
+export function getChatMemoryStorageKey(plantId = getSelectedPlantId(), mode = getStoredChatResponseMode()) {
+  return `${CHAT_MEMORY_KEY}:${plantId || "none"}:${mode}`;
+}
+
+export function loadLocalChatMemory(plantId = getSelectedPlantId(), mode = getStoredChatResponseMode()): ChatMemoryMessage[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(getChatMemoryStorageKey(plantId, mode)) || "[]") as ChatMemoryMessage[];
+    return parsed
+      .filter((item) => (item.role === "user" || item.role === "assistant") && item.content?.trim())
+      .slice(-12);
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalChatMemory(plantId: string, mode: ChatResponseMode, messages: ChatMemoryMessage[]) {
+  localStorage.setItem(getChatMemoryStorageKey(plantId, mode), JSON.stringify(messages.slice(-12)));
+}
+
+export function appendLocalChatMemory(plantId: string, mode: ChatResponseMode, ...messages: ChatMemoryMessage[]) {
+  const next = [...loadLocalChatMemory(plantId, mode), ...messages].filter((item) => item.content.trim()).slice(-12);
+  saveLocalChatMemory(plantId, mode, next);
+}
+
+export function getUserProfilePhoto() {
+  return localStorage.getItem(USER_PROFILE_PHOTO_KEY) || "";
+}
+
+export function setUserProfilePhoto(value: string) {
+  if (value) localStorage.setItem(USER_PROFILE_PHOTO_KEY, value);
+}
