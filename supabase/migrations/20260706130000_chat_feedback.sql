@@ -22,6 +22,11 @@ CREATE INDEX IF NOT EXISTS idx_chat_feedback_rating_created
 
 ALTER TABLE public.chat_feedback ENABLE ROW LEVEL SECURITY;
 
+-- 재실행 안전(멱등)하도록 기존 정책은 삭제 후 재생성
+DROP POLICY IF EXISTS "Users can read own chat feedback" ON public.chat_feedback;
+DROP POLICY IF EXISTS "Users can insert feedback for own assistant messages" ON public.chat_feedback;
+DROP POLICY IF EXISTS "Users can update own chat feedback" ON public.chat_feedback;
+
 CREATE POLICY "Users can read own chat feedback"
   ON public.chat_feedback
   FOR SELECT
