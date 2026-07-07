@@ -12,6 +12,8 @@ from langgraph.graph import StateGraph, END
 
 from app.core.config import settings  # noqa: F401 - 테스트가 pipeline.settings를 참조
 from app.services.rag.vectorstore import search_documents  # noqa: F401 - 하위 호환 재노출
+from app.services.rag.vision import analyze_plant_image  # noqa: F401 - 하위 호환 재노출
+from app.services.rag import nodes_context as _nodes_context
 from app.services.rag.common import (  # noqa: F401 - 하위 호환 재노출
     AgentState,
     chat_mode_prefix,
@@ -23,12 +25,7 @@ from app.services.rag.common import (  # noqa: F401 - 하위 호환 재노출
     make_session_title,
     recall_user_name,
 )
-from app.services.rag.nodes_context import (
-    extract_image_signals,
-    load_chat_history,
-    summarize_user_context,
-    validate_input,
-)
+from app.services.rag.nodes_context import load_chat_history, summarize_user_context, validate_input
 from app.services.rag.nodes_retrieval import (
     build_retrieval_query,
     grade_or_rerank,
@@ -38,6 +35,16 @@ from app.services.rag.nodes_generation import generate_answer, safety_review
 from app.services.rag.nodes_persistence import persist_result
 
 logger = logging.getLogger(__name__)
+
+
+def extract_image_signals(state: AgentState) -> Dict[str, Any]:
+    """Compatibility wrapper for tests that monkeypatch pipeline.analyze_plant_image."""
+    original = _nodes_context.analyze_plant_image
+    _nodes_context.analyze_plant_image = analyze_plant_image
+    try:
+        return _nodes_context.extract_image_signals(state)
+    finally:
+        _nodes_context.analyze_plant_image = original
 
 # 스트리밍 진행 표시용 노드 순서 및 사용자 안내 라벨
 WORKFLOW_NODE_LABELS: List[tuple] = [

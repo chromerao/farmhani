@@ -23,6 +23,9 @@ export const PENDING_DIAGNOSIS_QUESTION_KEY = "farmhani_pending_diagnosis_questi
 export const CHAT_RESPONSE_MODE_KEY = "farmhani_chat_response_mode";
 export const CHAT_MEMORY_KEY = "farmhani_chat_memory";
 export const USER_PROFILE_PHOTO_KEY = "farmhani_user_profile_photo";
+export const NOTIFICATION_ENABLED_KEY = "farmhani_notification_enabled";
+export const WATERING_NOTIFIED_DATE_KEY = "farmhani_watering_notified_date";
+export const TODAY_CHECKLIST_EXPANDED_KEY = "farmhani_today_checklist_expanded";
 
 export const defaultPlantImages = [
   "https://images.unsplash.com/photo-1614594975525-e45190c55d0b?auto=format&fit=crop&w=1200&q=80",

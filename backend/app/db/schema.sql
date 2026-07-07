@@ -23,7 +23,7 @@ IF NOT EXISTS vector;
                 species TEXT                    ,
                 location TEXT                   ,
                 sunlight TEXT                   ,
-                health_score INTEGER DEFAULT 100,
+                health_score INTEGER,
                 moisture TEXT                   ,
                 next_task TEXT                  ,
                 image_url TEXT                  ,

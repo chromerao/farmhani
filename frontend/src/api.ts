@@ -1,6 +1,7 @@
 import { mockChatResponse, mockPlants } from "./mockData";
 import type {
   CareLog,
+  ChatFeedbackRating,
   ChatMessage,
   ChatMemoryMessage,
   ChatModelInfo,
@@ -24,6 +25,7 @@ const SUPABASE_STORAGE_BUCKET = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 
 const ACCESS_TOKEN_KEY = "farmhani_access_token";
 const REFRESH_TOKEN_KEY = "farmhani_refresh_token";
 const LOCAL_PLANTS_KEY = "farmhani_local_plants";
+const MAX_PHOTO_UPLOAD_BYTES = 8 * 1024 * 1024;
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -223,7 +225,6 @@ export async function createPlant(input: Pick<Plant, "name" | "species" | "locat
     const plant: Plant = {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
-      healthScore: 88,
       moisture: "기록 대기",
       nextTask: "첫 관찰 기록 작성",
       ...input
@@ -293,7 +294,8 @@ export async function getUploadSignedUrl(file: File): Promise<UploadSignedUrlRes
     method: "POST",
     body: JSON.stringify({
       fileName: file.name,
-      mimeType: file.type
+      mimeType: file.type,
+      fileSize: file.size
     })
   });
 }
@@ -343,6 +345,10 @@ async function uploadPlantPhotoViaBackend(plantId: string, file: File, note?: st
 }
 
 export async function uploadPlantPhoto(plantId: string, file: File, note?: string): Promise<PlantPhoto> {
+  if (file.size > MAX_PHOTO_UPLOAD_BYTES) {
+    throw new Error("사진 파일이 너무 큽니다. 8MB 이하로 업로드해주세요.");
+  }
+
   try {
     const signed = await getUploadSignedUrl(file);
     await uploadFileToSignedUrl(signed.signedUrl, file);
@@ -493,6 +499,17 @@ export async function getTodayChecklist(): Promise<ChecklistTask[]> {
 
 export async function getChatModelInfo(): Promise<ChatModelInfo> {
   return request<ChatModelInfo>("/api/v1/chat/model-info", { auth: false });
+}
+
+export async function submitChatFeedback(
+  messageId: string,
+  rating: ChatFeedbackRating,
+  comment?: string
+): Promise<{ messageId: string; rating: string; saved: boolean }> {
+  return request<{ messageId: string; rating: string; saved: boolean }>(`/api/v1/chat/messages/${messageId}/feedback`, {
+    method: "POST",
+    body: JSON.stringify({ rating, comment })
+  });
 }
 
 export async function listChatSessions(plantId?: string, responseMode?: ChatResponseMode) {

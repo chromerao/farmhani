@@ -46,6 +46,7 @@ export type UploadSignedUrlResponse = {
 };
 
 export type ChatResponseMode = "expert" | "companion";
+export type ChatFeedbackRating = "helpful" | "not_helpful" | "unsafe" | "irrelevant";
 
 export type ChatMemoryMessage = {
   role: "user" | "assistant";

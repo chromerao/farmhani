@@ -5,11 +5,13 @@ import { formatDate } from "./format";
 
 export function plantCardHtml(plant: Plant, index: number) {
   const image = plant.imageUrl;
-  const status = plant.healthScore && plant.healthScore < 70 ? "주의 필요" : "건강함";
+  const status = plant.healthScore == null ? "관찰 전" : plant.healthScore < 70 ? "주의 필요" : "건강함";
   const badgeClass =
     status === "주의 필요"
       ? "bg-diagnostic-red/10 border border-diagnostic-red/20 text-diagnostic-red"
-      : "bg-white/80 text-primary";
+      : status === "관찰 전"
+        ? "bg-white/80 text-on-surface-variant"
+        : "bg-white/80 text-primary";
 
   return `<div class="bg-surface-container-lowest rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all group cursor-pointer border border-outline-variant/10" data-plant-card="${escapeHtml(plant.id)}">
     <div class="relative h-48 overflow-hidden">
@@ -22,7 +24,7 @@ export function plantCardHtml(plant: Plant, index: number) {
             </div>`
       }
       <div class="absolute top-4 right-4 ${badgeClass} backdrop-blur-md px-3 py-1 rounded-full text-label-sm font-bold flex items-center gap-1">
-        <span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">${status === "주의 필요" ? "warning" : "check_circle"}</span>
+        <span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">${status === "주의 필요" ? "warning" : status === "관찰 전" ? "visibility" : "check_circle"}</span>
         ${status}
       </div>
     </div>

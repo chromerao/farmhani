@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, status, Depends, HTTPException, Path, Query
 from fastapi.responses import StreamingResponse
@@ -11,7 +11,16 @@ from app.auth.security import get_current_user
 from app.core.config import settings
 from app.core.ratelimit import rate_limit_chat
 from app.db.session import get_supabase_client
-from app.schemas.chat import PlantCareChatRequest, PlantCareChatResponse, Citation, ChatSession, ChatMessage, ChatModelInfo
+from app.schemas.chat import (
+    PlantCareChatRequest,
+    PlantCareChatResponse,
+    Citation,
+    ChatSession,
+    ChatMessage,
+    ChatModelInfo,
+    ChatFeedbackRequest,
+    ChatFeedbackResponse,
+)
 from app.services.rag.pipeline import chat_mode_prefix, run_rag_workflow, run_rag_workflow_stream
 
 logger = logging.getLogger(__name__)
@@ -184,6 +193,77 @@ def list_chat_sessions(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="상담 세션 목록 조회 중 오류가 발생했습니다."
         )
+
+@router.post("/messages/{messageId}/feedback", response_model=ChatFeedbackResponse, status_code=status.HTTP_200_OK, summary="AI 답변 피드백 저장")
+def save_chat_feedback(
+    feedback: ChatFeedbackRequest,
+    messageId: uuid.UUID = Path(..., description="피드백을 남길 assistant 메시지 UUID"),
+    current_user_id: uuid.UUID = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
+):
+    try:
+        try:
+            message_res = (
+                db.table("chat_messages")
+                .select("id,session_id,role")
+                .eq("id", str(messageId))
+                .limit(1)
+                .execute()
+            )
+        except Exception:
+            # Older local schemas briefly used sender instead of role.
+            message_res = (
+                db.table("chat_messages")
+                .select("id,session_id,sender")
+                .eq("id", str(messageId))
+                .limit(1)
+                .execute()
+            )
+        if not message_res.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="피드백을 남길 답변을 찾을 수 없습니다."
+            )
+
+        message = message_res.data[0]
+        sender = message.get("role") or message.get("sender")
+        if sender != "assistant":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="AI 답변 메시지에만 피드백을 남길 수 있습니다."
+            )
+
+        session_res = (
+            db.table("chat_sessions")
+            .select("user_id")
+            .eq("id", message["session_id"])
+            .limit(1)
+            .execute()
+        )
+        if not session_res.data or session_res.data[0].get("user_id") != str(current_user_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="피드백을 남길 답변을 찾을 수 없습니다."
+            )
+
+        payload = {
+            "message_id": str(messageId),
+            "user_id": str(current_user_id),
+            "rating": feedback.rating,
+            "comment": feedback.comment,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        db.table("chat_feedback").upsert(payload, on_conflict="message_id,user_id").execute()
+        return ChatFeedbackResponse(messageId=messageId, rating=feedback.rating)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("AI 답변 피드백 저장 중 오류 발생")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="AI 답변 피드백 저장 중 오류가 발생했습니다."
+        )
+
 
 @router.get("/sessions/{sessionId}/messages", response_model=List[ChatMessage], summary="세션별 대화 메시지 이력 조회")
 def list_chat_messages(

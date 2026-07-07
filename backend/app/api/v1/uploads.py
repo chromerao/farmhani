@@ -36,6 +36,16 @@ def create_signed_upload_url(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="지원하지 않는 이미지 형식입니다. (jpg, jpeg, png, webp, gif만 허용)"
         )
+    if request.mimeType and request.mimeType not in ALLOWED_IMAGE_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="지원하지 않는 이미지 형식입니다. (jpeg, png, webp, gif만 허용)"
+        )
+    if request.fileSize is not None and request.fileSize > MAX_PHOTO_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="사진 파일이 너무 큽니다. 8MB 이하로 업로드해주세요."
+        )
     try:
         # 고유 파일명 생성
         unique_filename = f"{uuid.uuid4()}{ext.lower()}"

@@ -61,6 +61,8 @@ jobs:
           assert rl.allow("u1")
           print("OK: rate limiter")
           EOF
+      - name: Backend tests
+        run: pytest tests
 
   frontend:
     name: Frontend (React + Vite)

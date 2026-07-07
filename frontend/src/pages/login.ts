@@ -1,5 +1,5 @@
 import { hasSupabaseAuthConfig, signInWithPassword, signUpWithPassword } from "../api";
-import { createHiddenFileInput, fileToDataUrl, frameAlert, normalizedText } from "../lib/dom";
+import { createHiddenFileInput, fileToResizedDataUrl, frameAlert, normalizedText } from "../lib/dom";
 import { setUserProfilePhoto } from "../lib/storage";
 import type { AppContext } from "./context";
 
@@ -71,7 +71,7 @@ export function createLoginPage(ctx: AppContext) {
 
       if (!hasSupabaseAuthConfig()) {
         if (!isLogin && selectedProfilePhoto) {
-          setUserProfilePhoto(await fileToDataUrl(selectedProfilePhoto));
+          setUserProfilePhoto(await fileToResizedDataUrl(selectedProfilePhoto));
         }
         navigate("dashboard");
         return;
@@ -94,7 +94,7 @@ export function createLoginPage(ctx: AppContext) {
 
         const result = await signUpWithPassword(emailValue, passwordValue);
         if (selectedProfilePhoto) {
-          setUserProfilePhoto(await fileToDataUrl(selectedProfilePhoto));
+          setUserProfilePhoto(await fileToResizedDataUrl(selectedProfilePhoto));
         }
         if (!result.access_token) {
           frameAlert(doc, "회원가입은 완료됐지만 세션이 발급되지 않았습니다. Supabase 이메일 인증을 완료한 뒤 로그인해 주세요.");

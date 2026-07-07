@@ -78,16 +78,29 @@ def load_chat_history(state: AgentState) -> Dict[str, Any]:
             if not session_res.data:
                 raise ValueError("상담 세션을 찾을 수 없거나 해당 세션에 대한 권한이 없습니다.")
         else:
-            session_res = (
-                db.table("chat_sessions")
-                .select("id")
-                .eq("user_id", user_id)
-                .eq("plant_id", plant_id)
-                .like("title", f"{prefix}%")
-                .order("created_at", desc=True)
-                .limit(1)
-                .execute()
-            )
+            try:
+                session_res = (
+                    db.table("chat_sessions")
+                    .select("id")
+                    .eq("user_id", user_id)
+                    .eq("plant_id", plant_id)
+                    .eq("response_mode", response_mode)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+            except Exception:
+                # response_mode 컬럼 미적용(마이그레이션 전) 환경: title 접두사로 폴백
+                session_res = (
+                    db.table("chat_sessions")
+                    .select("id")
+                    .eq("user_id", user_id)
+                    .eq("plant_id", plant_id)
+                    .like("title", f"{prefix}%")
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
         if not session_res.data:
             return {"chat_history": request_history[-12:], "session_id": None}
 

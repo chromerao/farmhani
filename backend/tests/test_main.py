@@ -21,6 +21,8 @@ class MockSupabaseTable:
         self.queries = []
 
     def select(self, *args, **kwargs):
+        if self.name == "chat_messages" and args and "sender" in str(args[0]):
+            raise RuntimeError("column chat_messages.sender does not exist")
         self.queries.append(("select", args, kwargs))
         return self
 
@@ -29,7 +31,14 @@ class MockSupabaseTable:
         return self
 
     def insert(self, data):
+        if self.name == "plants":
+            assert "health_score" in data
+            assert data["health_score"] is None
         self.queries.append(("insert", data))
+        return self
+
+    def upsert(self, data, **kwargs):
+        self.queries.append(("upsert", data, kwargs))
         return self
 
     def or_(self, filter_str):
@@ -215,6 +224,10 @@ class MockSupabaseTable:
                         "created_at": "2026-06-25T12:02:00+00:00"
                     }
                 ]
+                eq_queries = [q for q in self.queries if q[0] == "eq"]
+                message_id = next((str(q[2]) for q in eq_queries if q[1] == "id"), None)
+                if message_id:
+                    data = [item for item in data if item["id"] == message_id]
             elif any(q[0] == "insert" for q in self.queries):
                 insert_val = next(q[1] for q in self.queries if q[0] == "insert")
                 data = [
@@ -227,6 +240,14 @@ class MockSupabaseTable:
                         "created_at": datetime.now(timezone.utc).isoformat()
                     }
                 ]
+        elif self.name == "chat_feedback":
+            if any(q[0] == "upsert" for q in self.queries):
+                upsert_val = next(q[1] for q in self.queries if q[0] == "upsert")
+                data = [{
+                    "id": str(uuid.uuid4()),
+                    **upsert_val,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }]
         elif self.name == "plant_catalog":
             mock_catalog = [
                 {"id": "cat-001", "name": "몬스테라 델리시오사", "species": "Monstera deliciosa", "family_name": "천남성과", "description": "구멍 난 큰 잎"},
@@ -504,6 +525,28 @@ def test_list_chat_messages_success():
     assert data[0]["sender"] == "user"
     assert data[1]["sender"] == "assistant"
     assert len(data[1]["citations"]) == 1
+
+
+def test_save_chat_feedback_success():
+    message_id = "e3b07384-d113-49c3-a558-1ec114a84d46"
+    response = client.post(
+        f"/api/v1/chat/messages/{message_id}/feedback",
+        json={"rating": "helpful"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["messageId"] == message_id
+    assert data["rating"] == "helpful"
+    assert data["saved"] is True
+
+
+def test_save_chat_feedback_rejects_user_message():
+    message_id = "e3b07384-d113-49c3-a558-1ec114a84d45"
+    response = client.post(
+        f"/api/v1/chat/messages/{message_id}/feedback",
+        json={"rating": "helpful"}
+    )
+    assert response.status_code == 400
 
 
 def test_image_rag_signals_are_added_to_retrieval_query(monkeypatch):

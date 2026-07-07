@@ -34,6 +34,25 @@ export function fileToDataUrl(file: File) {
   });
 }
 
+export async function fileToResizedDataUrl(file: File, maxSize = 256) {
+  // 원본 사진을 그대로 base64로 저장하면 localStorage 5MB 한도를 넘겨
+  // 저장이 조용히 실패할 수 있다 — 아바타 용도로 축소해 수십 KB로 만든다.
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return fileToDataUrl(file);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    return canvas.toDataURL("image/jpeg", 0.85);
+  } catch {
+    return fileToDataUrl(file);
+  }
+}
+
 export function removeCategoryAddButtons(doc: Document) {
   doc.querySelectorAll("button").forEach((button) => {
     const text = normalizedText(button);
@@ -91,8 +110,9 @@ export function showFormModal(
     description: string;
     submitLabel: string;
     fields: { key: string; label: string; value?: string; placeholder?: string; required?: boolean }[];
+    photoField?: { label: string; description?: string };
   },
-  onSubmit: (values: Record<string, string>) => void
+  onSubmit: (values: Record<string, string>, photoFile?: File | null) => void
 ) {
   doc.querySelector("[data-app-modal]")?.remove();
   const overlay = doc.createElement("div");
@@ -114,6 +134,17 @@ export function showFormModal(
       </label>`
         )
         .join("")}
+      ${
+        options.photoField
+          ? `<div class="flex items-center justify-between gap-4 rounded-xl bg-surface-container border border-outline-variant/20 p-3">
+        <div class="min-w-0">
+          <span class="text-label-sm font-bold text-on-surface-variant">${escapeHtml(options.photoField.label)}</span>
+          <p class="text-label-sm text-outline truncate" data-form-photo-label>${escapeHtml(options.photoField.description ?? "선택된 사진 없음")}</p>
+        </div>
+        <button type="button" class="shrink-0 px-3 py-2 rounded-full bg-growth-light text-primary text-label-sm font-bold hover:brightness-95 transition-all" data-form-photo-pick>사진 선택</button>
+      </div>`
+          : ""
+      }
     </div>
     <div class="flex justify-end gap-2">
       <button class="px-4 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container" data-modal-cancel="true">취소</button>
@@ -121,6 +152,21 @@ export function showFormModal(
     </div>
   </div>`;
   doc.body.appendChild(overlay);
+
+  let selectedPhoto: File | null = null;
+  if (options.photoField) {
+    const photoInput = createHiddenFileInput(doc);
+    overlay.querySelector("[data-form-photo-pick]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      photoInput.click();
+    });
+    photoInput.addEventListener("change", () => {
+      selectedPhoto = photoInput.files?.[0] ?? null;
+      const label = overlay.querySelector("[data-form-photo-label]");
+      if (label) label.textContent = selectedPhoto ? selectedPhoto.name : options.photoField?.description ?? "선택된 사진 없음";
+    });
+  }
+
   const firstInput = overlay.querySelector("input[data-form-field]") as HTMLInputElement | null;
   firstInput?.focus();
   overlay.querySelector("[data-modal-cancel]")?.addEventListener("click", () => overlay.remove());
@@ -141,7 +187,7 @@ export function showFormModal(
     });
     if (missingRequired) return;
     overlay.remove();
-    onSubmit(values);
+    onSubmit(values, selectedPhoto);
   });
 }
 

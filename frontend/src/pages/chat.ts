@@ -6,9 +6,10 @@ import {
   hasSupabaseAuthConfig,
   listChatMessages,
   listChatSessions,
+  submitChatFeedback,
   uploadPlantPhoto
 } from "../api";
-import type { ChatMessage, ChatResponseMode, ChatSession, PlantCareChatResponse } from "../types";
+import type { ChatFeedbackRating, ChatMessage, ChatResponseMode, ChatSession, PlantCareChatResponse } from "../types";
 import { CHAT_RESPONSE_MODE_KEY, PENDING_DIAGNOSIS_QUESTION_KEY } from "../lib/constants";
 import { createHiddenFileInput, escapeHtml, frameAlert, normalizedText } from "../lib/dom";
 import { formatDate } from "../lib/format";
@@ -108,6 +109,40 @@ export function createChatPage(ctx: AppContext) {
     return wrapper;
   }
 
+  function feedbackButtonHtml(messageId: string, rating: ChatFeedbackRating, label: string, icon: string) {
+    return `<button type="button" class="inline-flex items-center gap-1 rounded-full border border-outline-variant/30 px-3 py-1.5 text-label-sm text-on-surface-variant hover:border-primary hover:text-primary transition-all" data-chat-feedback="${rating}" data-message-id="${escapeHtml(messageId)}">
+      <span class="material-symbols-outlined text-[16px]">${icon}</span>${label}
+    </button>`;
+  }
+
+  function bindChatFeedback(doc: Document, container: HTMLElement) {
+    container.querySelectorAll("[data-chat-feedback]").forEach((button) => {
+      button.addEventListener("click", async (event) => {
+        event.preventDefault();
+        const target = button as HTMLButtonElement;
+        const rating = target.dataset.chatFeedback as ChatFeedbackRating | undefined;
+        const messageId = target.dataset.messageId;
+        if (!rating || !messageId) return;
+
+        const group = target.closest("[data-feedback-group]") as HTMLElement | null;
+        group?.querySelectorAll("button").forEach((item) => item.setAttribute("disabled", "true"));
+        try {
+          await submitChatFeedback(messageId, rating);
+          group?.querySelectorAll("button").forEach((item) => {
+            item.classList.toggle("border-primary", item === target);
+            item.classList.toggle("text-primary", item === target);
+            item.classList.toggle("bg-growth-light", item === target);
+          });
+          const status = group?.querySelector("[data-feedback-status]");
+          if (status) status.textContent = "피드백을 저장했습니다.";
+        } catch (error) {
+          group?.querySelectorAll("button").forEach((item) => item.removeAttribute("disabled"));
+          frameAlert(doc, `피드백 저장에 실패했습니다. ${error instanceof Error ? error.message : ""}`);
+        }
+      });
+    });
+  }
+
   function renderAssistantAnswer(doc: Document, wrapper: HTMLElement, answer: PlantCareChatResponse) {
     const isCompanionMode = chatResponseModeRef.current === "companion";
     const assistantIcon = isCompanionMode ? "local_florist" : "nature";
@@ -135,6 +170,15 @@ export function createChatPage(ctx: AppContext) {
         return `<a class="citation-link inline-flex items-center gap-1 rounded-full bg-growth-light px-2 py-1 text-primary text-[11px] font-bold"${url}>${index + 1}. ${label}</a>`;
       })
       .join(" ");
+    const feedback = answer.messageId
+      ? `<div class="flex flex-wrap items-center gap-2 border-t border-outline-variant/20 pt-3" data-feedback-group="true">
+          <span class="text-label-sm text-outline">이 답변은 어땠나요?</span>
+          ${feedbackButtonHtml(answer.messageId, "helpful", "도움됨", "thumb_up")}
+          ${feedbackButtonHtml(answer.messageId, "not_helpful", "부정확", "thumb_down")}
+          ${feedbackButtonHtml(answer.messageId, "unsafe", "위험함", "report")}
+          <span class="text-label-sm text-primary" data-feedback-status></span>
+        </div>`
+      : "";
 
     wrapper.innerHTML = `<div class="flex items-start gap-3 max-w-[85%]">
       <div class="w-8 h-8 rounded-full bg-sage-accent flex-shrink-0 flex items-center justify-center">
@@ -174,11 +218,13 @@ export function createChatPage(ctx: AppContext) {
             : ""
         }
         ${citations ? `<div class="flex flex-wrap gap-2 pt-2">${citations}</div>` : ""}
+        ${feedback}
         ${answer.safetyNotice ? `<p class="text-[11px] text-outline border-t border-outline-variant/20 pt-3">${escapeHtml(answer.safetyNotice)}</p>` : ""}
       </div>
     </div>
     <span class="text-label-sm text-outline ml-11">방금</span>`;
 
+    bindChatFeedback(doc, wrapper);
     const messages = doc.getElementById("chat-messages");
     if (messages) messages.scrollTop = messages.scrollHeight;
   }
@@ -334,7 +380,8 @@ export function createChatPage(ctx: AppContext) {
       possibleCauses: splitLines(causesMatch?.[1]),
       todayActions: splitLines(actionsMatch?.[1]),
       observationChecklist: [],
-      citations: message.citations || []
+      citations: message.citations || [],
+      messageId: message.id
     };
   }
 

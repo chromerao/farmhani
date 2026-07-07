@@ -4,6 +4,7 @@ import {
   CHAT_MEMORY_KEY,
   CHAT_RESPONSE_MODE_KEY,
   LAST_SESSION_ID_KEY,
+  NOTIFICATION_ENABLED_KEY,
   SELECTED_PLANT_ID_KEY,
   USER_PROFILE_PHOTO_KEY
 } from "./constants";
@@ -66,5 +67,19 @@ export function getUserProfilePhoto() {
 }
 
 export function setUserProfilePhoto(value: string) {
-  if (value) localStorage.setItem(USER_PROFILE_PHOTO_KEY, value);
+  if (!value) return;
+  try {
+    localStorage.setItem(USER_PROFILE_PHOTO_KEY, value);
+  } catch (error) {
+    // 대용량 data URL은 localStorage 5MB 한도를 넘길 수 있다 — 가입 흐름을 막지 않는다
+    console.warn("[Farmhani] 프로필 사진 저장 실패(용량 초과 가능):", error);
+  }
+}
+
+export function isNotificationsEnabled() {
+  return localStorage.getItem(NOTIFICATION_ENABLED_KEY) === "true";
+}
+
+export function setNotificationsEnabled(enabled: boolean) {
+  localStorage.setItem(NOTIFICATION_ENABLED_KEY, String(enabled));
 }

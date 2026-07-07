@@ -249,6 +249,7 @@ def create_plant(
             "species": plant_in.species,
             "location": plant_in.location,
             "sunlight": plant_in.sunlight,
+            "health_score": None,
             "image_url": plant_in.imageUrl
         }
         response = db.table("plants").insert(insert_data).execute()
@@ -610,4 +611,3 @@ def delete_care_log(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="재배 로그 삭제 중 오류가 발생했습니다."
         )
-

@@ -1,7 +1,7 @@
 import { clearAuthSession, hasAuthSession, hasSupabaseAuthConfig, searchRagDocuments } from "../api";
 import { PENDING_DIAGNOSIS_QUESTION_KEY } from "../lib/constants";
-import { escapeHtml, frameAlert, normalizedText } from "../lib/dom";
-import { getUserProfilePhoto } from "../lib/storage";
+import { createHiddenFileInput, escapeHtml, fileToResizedDataUrl, frameAlert, normalizedText } from "../lib/dom";
+import { getUserProfilePhoto, isNotificationsEnabled, setNotificationsEnabled, setUserProfilePhoto } from "../lib/storage";
 import type { AppContext } from "./context";
 
 export function createChrome(ctx: AppContext) {
@@ -92,12 +92,49 @@ export function createChrome(ctx: AppContext) {
       (header.lastElementChild as HTMLElement | null);
     if (!rightArea) return;
 
+    // 페이지마다 헤더 우측 컨테이너 클래스가 달라(.gap-4/.gap-2 등) rightArea 안에서만 찾으면
+    // 아바타를 놓칠 수 있다 — 헤더 전체에서 원형(rounded-full) 컨테이너 속 img를 찾는다.
     const storedPhoto = getUserProfilePhoto();
-    const existingProfileImage = rightArea.querySelector("img") as HTMLImageElement | null;
+    const existingProfileImage = (Array.from(header.querySelectorAll("img")).find((img) =>
+      img.closest(".rounded-full")
+    ) ?? null) as HTMLImageElement | null;
+    // replaceWith 이후에는 closest가 동작하지 않으므로 컨테이너를 교체 전에 잡아둔다
+    const existingAvatarContainer = (existingProfileImage?.closest(".rounded-full") ?? null) as HTMLElement | null;
     if (existingProfileImage && storedPhoto) {
       existingProfileImage.src = storedPhoto;
       existingProfileImage.alt = "사용자 프로필 사진";
+    } else if (existingProfileImage) {
+      // 저장된 사진이 없으면 목업의 타인 사진 대신 중립 아이콘을 보여준다
+      const placeholder = doc.createElement("span");
+      placeholder.className = "material-symbols-outlined text-primary text-[18px]";
+      placeholder.dataset.avatarPlaceholder = "true";
+      placeholder.textContent = "person";
+      existingAvatarContainer?.classList.add("bg-primary-fixed-dim", "flex", "items-center", "justify-center");
+      existingProfileImage.replaceWith(placeholder);
     }
+
+    // 아바타 클릭으로 프로필 사진 등록/변경 (가입 시 저장에 실패했더라도 여기서 복구 가능)
+    function attachAvatarPicker(container: HTMLElement) {
+      if (container.dataset.avatarPicker === "true") return;
+      container.dataset.avatarPicker = "true";
+      container.style.cursor = "pointer";
+      container.title = "프로필 사진 변경";
+      const input = createHiddenFileInput(doc);
+      container.addEventListener("click", (event) => {
+        event.preventDefault();
+        input.click();
+      });
+      input.addEventListener("change", async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const dataUrl = await fileToResizedDataUrl(file);
+        setUserProfilePhoto(dataUrl);
+        container.innerHTML = `<img alt="사용자 프로필 사진" class="w-full h-full object-cover" src="${escapeHtml(dataUrl)}">`;
+        frameAlert(doc, "프로필 사진을 변경했습니다.");
+      });
+    }
+
+    if (existingAvatarContainer) attachAvatarPicker(existingAvatarContainer);
 
     const isLoggedIn = hasAuthSession() || !hasSupabaseAuthConfig();
     const wrapper = doc.createElement("div");
@@ -111,6 +148,7 @@ export function createChrome(ctx: AppContext) {
       avatar.innerHTML = storedPhoto
         ? `<img alt="사용자 프로필 사진" class="w-full h-full object-cover" src="${escapeHtml(storedPhoto)}">`
         : '<span class="material-symbols-outlined text-primary text-[18px]">person</span>';
+      attachAvatarPicker(avatar);
       wrapper.appendChild(avatar);
     }
 
@@ -131,6 +169,63 @@ export function createChrome(ctx: AppContext) {
     rightArea.appendChild(wrapper);
   }
 
+  function styleNotificationButton(button: HTMLElement) {
+    const win = button.ownerDocument.defaultView;
+    const supported = Boolean(win && "Notification" in win);
+    const enabled = supported && win?.Notification.permission === "granted" && isNotificationsEnabled();
+    button.setAttribute(
+      "title",
+      supported
+        ? enabled
+          ? "물주기 알림 켜짐 - 클릭하면 끕니다"
+          : "물주기 알림 켜기"
+        : "이 브라우저는 알림을 지원하지 않습니다"
+    );
+    button.classList.toggle("text-primary", Boolean(enabled));
+    button.classList.toggle("bg-growth-light", Boolean(enabled));
+  }
+
+  async function toggleNotifications(doc: Document, button: HTMLElement) {
+    const win = doc.defaultView;
+    if (!win || !("Notification" in win)) {
+      frameAlert(doc, "이 브라우저는 알림을 지원하지 않습니다.");
+      return;
+    }
+
+    if (win.Notification.permission === "denied") {
+      setNotificationsEnabled(false);
+      styleNotificationButton(button);
+      frameAlert(doc, "브라우저에서 알림이 차단되어 있습니다. 사이트 설정에서 알림을 허용해 주세요.");
+      return;
+    }
+
+    if (win.Notification.permission === "granted") {
+      const nextEnabled = !isNotificationsEnabled();
+      setNotificationsEnabled(nextEnabled);
+      styleNotificationButton(button);
+      if (nextEnabled) {
+        new win.Notification("Farm하니 알림이 켜졌어요", {
+          body: "물주기가 필요한 식물이 있으면 하루 한 번 알려드릴게요."
+        });
+      } else {
+        frameAlert(doc, "물주기 알림을 껐습니다.");
+      }
+      return;
+    }
+
+    const permission = await win.Notification.requestPermission();
+    const granted = permission === "granted";
+    setNotificationsEnabled(granted);
+    styleNotificationButton(button);
+    if (granted) {
+      new win.Notification("Farm하니 알림이 켜졌어요", {
+        body: "물주기가 필요한 식물이 있으면 하루 한 번 알려드릴게요."
+      });
+    } else {
+      frameAlert(doc, "알림 권한이 허용되지 않았습니다.");
+    }
+  }
+
   function bindGenericControls(doc: Document) {
     doc.querySelectorAll("button, a").forEach((element) => {
       const text = normalizedText(element);
@@ -146,9 +241,12 @@ export function createChrome(ctx: AppContext) {
           doc.documentElement.classList.toggle("dark");
         });
       } else if (text.includes("notifications")) {
+        styleNotificationButton(target);
+        if (target.dataset.notificationsBound === "true") return;
+        target.dataset.notificationsBound = "true";
         element.addEventListener("click", (event) => {
           event.preventDefault();
-          frameAlert(doc, "새 알림이 없습니다.");
+          void toggleNotifications(doc, target);
         });
       } else if (text.includes("settings")) {
         element.addEventListener("click", (event) => {

@@ -132,18 +132,28 @@ export function createDetailPage(ctx: AppContext) {
             { key: "species", label: "품종", value: plant.species ?? "", placeholder: "예: 몬스테라 델리시오사" },
             { key: "location", label: "키우는 위치", value: plant.location ?? "", placeholder: "예: 거실 창가" },
             { key: "sunlight", label: "햇빛 환경", value: plant.sunlight ?? "", placeholder: "예: 오전 직사광선" }
-          ]
+          ],
+          photoField: {
+            label: "대표 사진 변경",
+            description: plant.imageUrl ? "현재 사진 유지 (바꾸려면 선택)" : "선택된 사진 없음"
+          }
         },
-        async (values) => {
+        async (values, photoFile) => {
           try {
+            let imageUrl: string | undefined;
+            if (photoFile) {
+              const photo = await uploadPlantPhoto(plantId, photoFile, `${values.name} 프로필 사진`);
+              imageUrl = storagePathToPublicUrl(photo.storagePath);
+            }
             await updatePlant(plantId, {
               name: values.name,
               species: values.species,
               location: values.location,
-              sunlight: values.sunlight
+              sunlight: values.sunlight,
+              ...(imageUrl ? { imageUrl } : {})
             });
             currentPlant = null;
-            frameAlert(doc, "식물 정보를 수정했습니다.");
+            frameAlert(doc, photoFile ? "식물 정보와 대표 사진을 수정했습니다." : "식물 정보를 수정했습니다.");
             bindDetailData(doc);
           } catch (error) {
             if (!handleApiError(doc, error)) frameAlert(doc, "식물 정보 수정에 실패했습니다.");

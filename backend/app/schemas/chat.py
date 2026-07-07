@@ -39,6 +39,17 @@ class ChatModelInfo(BaseModel):
     chatModel: str = Field(..., description="현재 식물 상담 답변 생성에 사용하는 LLM 모델명")
     visionModel: str = Field(..., description="현재 사진 분석에 사용하는 Vision 모델명")
 
+
+class ChatFeedbackRequest(BaseModel):
+    rating: Literal["helpful", "not_helpful", "unsafe", "irrelevant"] = Field(..., description="AI 답변에 대한 사용자 평가")
+    comment: Optional[str] = Field(None, max_length=1000, description="선택 입력 피드백 메모")
+
+
+class ChatFeedbackResponse(BaseModel):
+    messageId: UUID
+    rating: str
+    saved: bool = True
+
 class ChatSession(BaseModel):
     id: UUID
     userId: UUID

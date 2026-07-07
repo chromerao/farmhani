@@ -1,9 +1,9 @@
 import { createCareLog, getPlants, getTodayChecklist, hasAuthSession, hasSupabaseAuthConfig } from "../api";
 import type { ChecklistTask, Plant } from "../types";
-import { PENDING_DIAGNOSIS_QUESTION_KEY } from "../lib/constants";
+import { PENDING_DIAGNOSIS_QUESTION_KEY, TODAY_CHECKLIST_EXPANDED_KEY, WATERING_NOTIFIED_DATE_KEY } from "../lib/constants";
 import { createHiddenFileInput, escapeHtml, findPlantGrid, frameAlert, normalizedText, showTextInputModal } from "../lib/dom";
 import { todayDateInput } from "../lib/format";
-import { clearLastSessionId, getSelectedPlantId, setSelectedPlantId } from "../lib/storage";
+import { clearLastSessionId, getSelectedPlantId, isNotificationsEnabled, setSelectedPlantId } from "../lib/storage";
 import { addPlantCardHtml, plantCardHtml } from "../lib/plantCards";
 import type { AppContext, DashboardPlantCategory } from "./context";
 
@@ -370,18 +370,28 @@ export function createDashboardPage(ctx: AppContext) {
 
     const doneCount = tasks.filter((task) => task.done).length;
     const allDone = doneCount === tasks.length;
+    const isExpanded = localStorage.getItem(TODAY_CHECKLIST_EXPANDED_KEY) === "true";
+    const undoneCount = tasks.length - doneCount;
 
     const card = doc.createElement("div");
     card.dataset.todayChecklist = "true";
-    card.className = "mb-6 rounded-2xl border border-primary/20 bg-white px-5 py-4 shadow-sm animate-fade-in";
-    card.innerHTML = `<div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-2">
+    card.className = "mb-4 rounded-xl border border-primary/20 bg-white px-4 py-3 shadow-sm animate-fade-in";
+    card.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3">
+        <button type="button" class="flex min-w-0 items-center gap-2 text-left" data-checklist-toggle="true" aria-expanded="${isExpanded}">
           <span class="material-symbols-outlined text-primary">checklist</span>
-          <h3 class="text-headline-sm font-bold text-on-surface">오늘의 체크리스트</h3>
+          <span class="min-w-0">
+            <span class="block text-label-lg font-bold text-on-surface">오늘의 체크리스트</span>
+            <span class="block text-label-sm text-on-surface-variant">${allDone ? "오늘 할 일을 모두 마쳤어요." : `남은 작업 ${undoneCount}개가 있어요.`}</span>
+          </span>
+        </button>
+        <div class="flex items-center gap-2">
+          <span class="text-label-sm font-bold ${allDone ? "text-primary" : "text-on-surface-variant"}">${doneCount}/${tasks.length} 완료</span>
+          <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-growth-light text-primary hover:brightness-95 transition-all" data-checklist-toggle="true" aria-label="${isExpanded ? "체크리스트 접기" : "체크리스트 펼치기"}" aria-expanded="${isExpanded}">
+            <span class="material-symbols-outlined text-[20px]">${isExpanded ? "expand_less" : "expand_more"}</span>
+          </button>
         </div>
-        <span class="text-label-sm font-bold ${allDone ? "text-primary" : "text-on-surface-variant"}">${doneCount}/${tasks.length} 완료${allDone ? " 🎉" : ""}</span>
       </div>
-      <div class="space-y-1">
+      <div class="${isExpanded ? "mt-3 space-y-1" : "hidden"}" data-checklist-body="true">
         ${tasks
           .map(
             (task) => `<button class="w-full text-left flex items-center gap-3 p-2.5 rounded-xl transition-all ${
@@ -400,6 +410,15 @@ export function createDashboardPage(ctx: AppContext) {
           .join("")}
       </div>`;
     plantsSection.insertBefore(card, plantsSection.firstChild);
+
+    card.querySelectorAll("[data-checklist-toggle]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        const nextExpanded = localStorage.getItem(TODAY_CHECKLIST_EXPANDED_KEY) !== "true";
+        localStorage.setItem(TODAY_CHECKLIST_EXPANDED_KEY, String(nextExpanded));
+        renderTodayChecklist(doc, tasks);
+      });
+    });
 
     card.querySelectorAll("[data-checklist-task]").forEach((button) => {
       button.addEventListener("click", (event) => {
@@ -462,11 +481,10 @@ export function createDashboardPage(ctx: AppContext) {
     // 브라우저 알림 (권한이 이미 허용된 경우에만, 하루 1회) — 물주기가 밀린 식물 기준
     const dueWaterCount = tasks.filter((task) => task.taskType === "water" && !task.done).length;
     const win = doc.defaultView;
-    if (dueWaterCount > 0 && win && "Notification" in win && win.Notification.permission === "granted") {
-      const NOTIFIED_KEY = "farmhani_watering_notified_date";
+    if (dueWaterCount > 0 && isNotificationsEnabled() && win && "Notification" in win && win.Notification.permission === "granted") {
       const today = new Date().toISOString().slice(0, 10);
-      if (localStorage.getItem(NOTIFIED_KEY) !== today) {
-        localStorage.setItem(NOTIFIED_KEY, today);
+      if (localStorage.getItem(WATERING_NOTIFIED_DATE_KEY) !== today) {
+        localStorage.setItem(WATERING_NOTIFIED_DATE_KEY, today);
         new win.Notification("Farm하니? 물주기 알림", {
           body: `물주기가 필요한 식물이 ${dueWaterCount}개 있어요. 오늘의 체크리스트를 확인해보세요.`
         });
