@@ -13,7 +13,9 @@ body {
 
 .design-frame {
   width: 100%;
+  /* 모바일 브라우저 주소창 변동 대응 — dvh 미지원 브라우저는 100vh 폴백 */
   height: 100vh;
+  height: 100dvh;
   display: block;
   border: 0;
   background: #f7fbf6;

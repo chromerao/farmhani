@@ -123,6 +123,7 @@ function App() {
 
     removeCategoryAddButtons(doc);
     removeChatConfidence(doc);
+    chrome.bindMobileChrome(doc);
     chrome.bindGenericControls(doc);
     chrome.bindFrameNavigation(doc);
     chrome.bindLogoHome(doc);

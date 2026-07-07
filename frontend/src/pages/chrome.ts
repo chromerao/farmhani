@@ -1,8 +1,9 @@
 import { clearAuthSession, hasAuthSession, hasSupabaseAuthConfig, searchRagDocuments } from "../api";
 import { PENDING_DIAGNOSIS_QUESTION_KEY } from "../lib/constants";
 import { createHiddenFileInput, escapeHtml, fileToResizedDataUrl, frameAlert, normalizedText } from "../lib/dom";
-import { getUserProfilePhoto, isNotificationsEnabled, setNotificationsEnabled, setUserProfilePhoto } from "../lib/storage";
+import { getSelectedPlantId, getUserProfilePhoto, isNotificationsEnabled, setNotificationsEnabled, setUserProfilePhoto } from "../lib/storage";
 import type { AppContext } from "./context";
+import type { DesignPage } from "../lib/constants";
 
 export function createChrome(ctx: AppContext) {
   const { page, navigate } = ctx;
@@ -226,6 +227,74 @@ export function createChrome(ctx: AppContext) {
     }
   }
 
+  function bindMobileChrome(doc: Document) {
+    // 1) 모바일 공통 스타일 — 주입 요소가 Tailwind CDN에 의존하지 않도록 핵심 레이아웃은 직접 CSS로 보장
+    if (!doc.querySelector("[data-mobile-style]")) {
+      const style = doc.createElement("style");
+      style.dataset.mobileStyle = "true";
+      style.textContent = `
+        [data-mobile-nav] { position: fixed; bottom: 0; left: 0; right: 0; z-index: 90; display: flex;
+          background: rgba(255,255,255,0.96); backdrop-filter: blur(8px); border-top: 1px solid rgba(0,0,0,0.08);
+          padding-bottom: env(safe-area-inset-bottom); }
+        [data-mobile-nav] button { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 2px;
+          padding: 8px 0 6px; border: 0; background: transparent; font-size: 11px; font-weight: 700;
+          color: #5f6c64; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+        [data-mobile-nav] button[data-active="true"] { color: #0f5238; }
+        @media (min-width: 768px) { [data-mobile-nav] { display: none; } }
+        @media (max-width: 767px) {
+          /* iOS에서 16px 미만 입력 포커스 시 자동 확대되는 것을 방지 */
+          input, textarea, select { font-size: 16px !important; }
+          /* 하단 네비게이션에 내용이 가려지지 않도록 여백 확보.
+             스크롤이 내부 main에서 일어나는 구조(dashboard/chat)에서도 동작하도록
+             body가 아닌 main에 패딩을 준다 (border-box라 overflow-hidden 플렉스도 함께 줄어든다) */
+          body[data-has-mobile-nav="true"] main { padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
+          /* 상세 페이지 플로팅 버튼을 네비 위로 올린다 */
+          [data-detail-delete-plant] { bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
+          [data-detail-edit-plant] { bottom: calc(140px + env(safe-area-inset-bottom)) !important; }
+        }
+      `;
+      doc.head.appendChild(style);
+    }
+
+    // 2) 하단 앱 네비게이션 (로그인 화면 제외)
+    if (page === "login" || doc.querySelector("[data-mobile-nav]")) return;
+    doc.body.dataset.hasMobileNav = "true";
+
+    const tabs: { key: DesignPage; label: string; icon: string }[] = [
+      { key: "dashboard", label: "홈", icon: "home" },
+      { key: "chat", label: "AI 상담", icon: "forum" },
+      { key: "add", label: "등록", icon: "add_circle" },
+      { key: "detail", label: "내 식물", icon: "potted_plant" }
+    ];
+
+    const nav = doc.createElement("nav");
+    nav.dataset.mobileNav = "true";
+    nav.setAttribute("aria-label", "모바일 하단 메뉴");
+    nav.innerHTML = tabs
+      .map(
+        (tab) => `<button type="button" data-mobile-tab="${tab.key}" data-active="${tab.key === page}">
+          <span class="material-symbols-outlined" style="font-size:22px;${tab.key === page ? "font-variation-settings:'FILL' 1;" : ""}">${tab.icon}</span>
+          ${tab.label}
+        </button>`
+      )
+      .join("");
+    doc.body.appendChild(nav);
+
+    nav.querySelectorAll("[data-mobile-tab]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        const target = (button as HTMLElement).dataset.mobileTab as DesignPage;
+        if (target === page) return;
+        // 등록된 식물이 없으면 '내 식물' 탭은 등록 화면으로 안내
+        if (target === "detail" && !getSelectedPlantId()) {
+          navigate("add");
+          return;
+        }
+        navigate(target);
+      });
+    });
+  }
+
   function bindGenericControls(doc: Document) {
     doc.querySelectorAll("button, a").forEach((element) => {
       const text = normalizedText(element);
@@ -352,5 +421,5 @@ export function createChrome(ctx: AppContext) {
     });
   }
 
-  return { bindTopSearch, bindLogoHome, bindSessionControls, bindGenericControls, bindFrameNavigation };
+  return { bindTopSearch, bindLogoHome, bindSessionControls, bindGenericControls, bindFrameNavigation, bindMobileChrome };
 }
