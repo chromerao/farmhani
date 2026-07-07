@@ -45,6 +45,10 @@ class MockSupabaseTable:
         self.queries.append(("or", filter_str))
         return self
 
+    def in_(self, field, values):
+        self.queries.append(("in", field, values))
+        return self
+
     def delete(self):
         self.queries.append(("delete",))
         return self
@@ -248,6 +252,17 @@ class MockSupabaseTable:
                     **upsert_val,
                     "created_at": datetime.now(timezone.utc).isoformat()
                 }]
+            elif any(q[0] == "select" for q in self.queries):
+                data = [{
+                    "message_id": "e3b07384-d113-49c3-a558-1ec114a84d46",
+                    "user_id": str(TEST_USER_ID),
+                    "rating": "helpful",
+                    "comment": None
+                }]
+                in_queries = [q for q in self.queries if q[0] == "in"]
+                allowed_ids = next((q[2] for q in in_queries if q[1] == "message_id"), None)
+                if allowed_ids is not None:
+                    data = [item for item in data if item["message_id"] in allowed_ids]
         elif self.name == "plant_catalog":
             mock_catalog = [
                 {"id": "cat-001", "name": "몬스테라 델리시오사", "species": "Monstera deliciosa", "family_name": "천남성과", "description": "구멍 난 큰 잎"},
@@ -547,6 +562,27 @@ def test_save_chat_feedback_rejects_user_message():
         json={"rating": "helpful"}
     )
     assert response.status_code == 400
+
+
+def test_list_session_feedback():
+    session_id = "e3b07384-d113-49c3-a558-1ec114a84d44"
+    response = client.get(f"/api/v1/chat/sessions/{session_id}/feedback")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["messageId"] == "e3b07384-d113-49c3-a558-1ec114a84d46"
+    assert data[0]["rating"] == "helpful"
+
+
+def test_feedback_summary():
+    response = client.get("/api/v1/chat/feedback/summary")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["sessionId"] == "e3b07384-d113-49c3-a558-1ec114a84d44"
+    assert data[0]["helpful"] == 1
+    assert data[0]["notHelpful"] == 0
+    assert data[0]["total"] == 1
 
 
 def test_image_rag_signals_are_added_to_retrieval_query(monkeypatch):

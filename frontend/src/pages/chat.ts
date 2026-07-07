@@ -2,6 +2,8 @@ import {
   askPlantCareStream,
   getAccessToken,
   getChatModelInfo,
+  getFeedbackSummary,
+  getSessionFeedback,
   hasAuthSession,
   hasSupabaseAuthConfig,
   listChatMessages,
@@ -9,7 +11,15 @@ import {
   submitChatFeedback,
   uploadPlantPhoto
 } from "../api";
-import type { ChatFeedbackRating, ChatMessage, ChatResponseMode, ChatSession, PlantCareChatResponse } from "../types";
+import type {
+  ChatFeedbackItem,
+  ChatFeedbackRating,
+  ChatMessage,
+  ChatResponseMode,
+  ChatSession,
+  PlantCareChatResponse,
+  SessionFeedbackStats
+} from "../types";
 import {
   CHAT_RESPONSE_MODE_KEY,
   PENDING_DIAGNOSIS_QUESTION_KEY,
@@ -144,6 +154,28 @@ export function createChatPage(ctx: AppContext) {
     </button>`;
   }
 
+  function markFeedbackSelected(group: HTMLElement, selected: HTMLElement, statusText: string) {
+    group.querySelectorAll("button").forEach((item) => {
+      item.setAttribute("disabled", "true");
+      item.classList.toggle("border-primary", item === selected);
+      item.classList.toggle("text-primary", item === selected);
+      item.classList.toggle("bg-growth-light", item === selected);
+    });
+    const status = group.querySelector("[data-feedback-status]");
+    if (status) status.textContent = statusText;
+  }
+
+  // 대화 이력을 다시 열 때 이미 남긴 피드백의 버튼 상태를 복원한다
+  function applyStoredFeedback(doc: Document, items: ChatFeedbackItem[]) {
+    items.forEach((item) => {
+      const button = doc.querySelector(
+        `[data-chat-feedback="${item.rating}"][data-message-id="${item.messageId}"]`
+      ) as HTMLElement | null;
+      const group = button?.closest("[data-feedback-group]") as HTMLElement | null;
+      if (button && group) markFeedbackSelected(group, button, "평가 완료");
+    });
+  }
+
   function bindChatFeedback(doc: Document, container: HTMLElement) {
     container.querySelectorAll("[data-chat-feedback]").forEach((button) => {
       button.addEventListener("click", async (event) => {
@@ -157,13 +189,7 @@ export function createChatPage(ctx: AppContext) {
         group?.querySelectorAll("button").forEach((item) => item.setAttribute("disabled", "true"));
         try {
           await submitChatFeedback(messageId, rating);
-          group?.querySelectorAll("button").forEach((item) => {
-            item.classList.toggle("border-primary", item === target);
-            item.classList.toggle("text-primary", item === target);
-            item.classList.toggle("bg-growth-light", item === target);
-          });
-          const status = group?.querySelector("[data-feedback-status]");
-          if (status) status.textContent = "피드백을 저장했습니다.";
+          if (group) markFeedbackSelected(group, target, "피드백을 저장했습니다.");
         } catch (error) {
           group?.querySelectorAll("button").forEach((item) => item.removeAttribute("disabled"));
           frameAlert(doc, `피드백 저장에 실패했습니다. ${error instanceof Error ? error.message : ""}`);
@@ -525,6 +551,10 @@ export function createChatPage(ctx: AppContext) {
       if (container) container.innerHTML = "";
       renderReferences(doc, []);
       messages.forEach((message) => renderHistoryMessage(doc, message));
+      // 이미 평가한 답변의 피드백 버튼 상태 복원 (보조 기능 — 실패해도 이력 표시는 유지)
+      void getSessionFeedback(sessionId)
+        .then((items) => applyStoredFeedback(doc, items))
+        .catch((error) => console.warn("[Farmhani] session feedback unavailable", error));
       forceNewChatSessionRef.current = false;
       setLastSessionId(sessionId);
       const plantId = getSelectedPlantId();
@@ -548,7 +578,15 @@ export function createChatPage(ctx: AppContext) {
     try {
       const plantId = getSelectedPlantId() || undefined;
       const mode = chatResponseModeRef.current;
-      const sessions = await listChatSessions(plantId, mode);
+      // 세션 목록과 피드백 통계를 병렬 조회 (통계 실패는 목록 표시를 막지 않는다)
+      const [sessions, feedbackStats] = await Promise.all([
+        listChatSessions(plantId, mode),
+        getFeedbackSummary(plantId).catch((error) => {
+          console.warn("[Farmhani] feedback summary unavailable", error);
+          return [] as SessionFeedbackStats[];
+        })
+      ]);
+      const statsBySession = new Map(feedbackStats.map((stats) => [stats.sessionId, stats]));
       container.innerHTML = `<div class="flex items-center gap-3 p-3 mb-1 cursor-pointer hover:bg-growth-light dark:hover:bg-tertiary-container rounded-lg transition-all duration-200 text-on-surface-variant" data-chat-home="true">
         <span class="material-symbols-outlined">home</span>
         <span class="font-label-md">홈 개요</span>
@@ -560,7 +598,7 @@ export function createChatPage(ctx: AppContext) {
       <div class="mt-4 mb-2 px-3">
         <span class="text-label-sm uppercase tracking-wider font-bold text-outline">이 식물의 상담</span>
       </div>
-      ${sessions.length ? sessions.map((session, index) => chatSessionItemHtml(session, index)).join("") : `<p class="px-3 py-2 text-label-sm text-on-surface-variant">아직 상담 내역이 없습니다.</p>`}`;
+      ${sessions.length ? sessions.map((session, index) => chatSessionItemHtml(session, index, statsBySession.get(session.id))).join("") : `<p class="px-3 py-2 text-label-sm text-on-surface-variant">아직 상담 내역이 없습니다.</p>`}`;
 
       container.querySelector("[data-chat-home]")?.addEventListener("click", () => navigate("dashboard"));
       container.querySelector("[data-new-chat]")?.addEventListener("click", () => {
@@ -588,13 +626,35 @@ export function createChatPage(ctx: AppContext) {
     }
   }
 
-  function chatSessionItemHtml(session: ChatSession, index: number) {
+  function feedbackStatsChipsHtml(stats?: SessionFeedbackStats) {
+    if (!stats || stats.total === 0) return "";
+    const chips: string[] = [];
+    if (stats.helpful > 0) {
+      chips.push(`<span class="inline-flex items-center gap-0.5 text-primary"><span class="material-symbols-outlined text-[13px]">thumb_up</span>${stats.helpful}</span>`);
+    }
+    if (stats.notHelpful > 0) {
+      chips.push(`<span class="inline-flex items-center gap-0.5 text-outline"><span class="material-symbols-outlined text-[13px]">thumb_down</span>${stats.notHelpful}</span>`);
+    }
+    if (stats.unsafe > 0) {
+      chips.push(`<span class="inline-flex items-center gap-0.5 text-diagnostic-red"><span class="material-symbols-outlined text-[13px]">report</span>${stats.unsafe}</span>`);
+    }
+    if (stats.irrelevant > 0) {
+      chips.push(`<span class="inline-flex items-center gap-0.5 text-outline"><span class="material-symbols-outlined text-[13px]">block</span>${stats.irrelevant}</span>`);
+    }
+    if (!chips.length) return "";
+    return `<span class="flex items-center gap-2 text-[11px] font-bold mt-0.5" title="이 상담방에서 남긴 답변 평가">${chips.join("")}</span>`;
+  }
+
+  function chatSessionItemHtml(session: ChatSession, index: number, stats?: SessionFeedbackStats) {
     const selected = getLastSessionId() === session.id || index === 0;
     const className = selected ? "text-primary font-bold" : "text-on-surface-variant";
     const title = session.title?.trim() || `상담 ${formatDate(session.createdAt)}`;
     return `<div class="flex items-center gap-3 p-3 mb-1 cursor-pointer hover:bg-growth-light rounded-lg ${className}" data-chat-session="${escapeHtml(session.id)}">
       <span class="material-symbols-outlined">eco</span>
-      <span class="font-label-md truncate" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+      <span class="min-w-0">
+        <span class="block font-label-md truncate" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+        ${feedbackStatsChipsHtml(stats)}
+      </span>
     </div>`;
   }
 

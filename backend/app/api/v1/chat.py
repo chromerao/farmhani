@@ -20,6 +20,8 @@ from app.schemas.chat import (
     ChatModelInfo,
     ChatFeedbackRequest,
     ChatFeedbackResponse,
+    ChatFeedbackItem,
+    SessionFeedbackStats,
 )
 from app.services.rag.pipeline import chat_mode_prefix, run_rag_workflow, run_rag_workflow_stream
 
@@ -262,6 +264,136 @@ def save_chat_feedback(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="AI 답변 피드백 저장 중 오류가 발생했습니다."
+        )
+
+
+@router.get("/sessions/{sessionId}/feedback", response_model=List[ChatFeedbackItem], summary="세션 내 내 피드백 조회")
+def list_session_feedback(
+    sessionId: uuid.UUID = Path(..., description="세션 UUID"),
+    current_user_id: uuid.UUID = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
+):
+    """
+    특정 상담 세션에서 현재 사용자가 남긴 답변 피드백 목록을 반환합니다.
+    대화 이력을 다시 열 때 이미 평가한 답변의 버튼 상태를 복원하는 데 사용합니다.
+    """
+    try:
+        session_check = db.table("chat_sessions").select("user_id").eq("id", str(sessionId)).execute()
+        if not session_check.data or session_check.data[0]["user_id"] != str(current_user_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="상담 세션을 찾을 수 없거나 해당 세션에 대한 권한이 없습니다."
+            )
+
+        messages_res = db.table("chat_messages").select("id").eq("session_id", str(sessionId)).execute()
+        message_ids = [item["id"] for item in messages_res.data or []]
+        if not message_ids:
+            return []
+
+        feedback_res = (
+            db.table("chat_feedback")
+            .select("message_id,rating,comment")
+            .eq("user_id", str(current_user_id))
+            .in_("message_id", message_ids)
+            .execute()
+        )
+        return [
+            ChatFeedbackItem(
+                messageId=uuid.UUID(item["message_id"]),
+                rating=item["rating"],
+                comment=item.get("comment")
+            )
+            for item in feedback_res.data or []
+        ]
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("세션 피드백 조회 중 오류 발생")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="세션 피드백 조회 중 오류가 발생했습니다."
+        )
+
+
+@router.get("/feedback/summary", response_model=List[SessionFeedbackStats], summary="세션별 피드백 통계")
+def get_feedback_summary(
+    plantId: uuid.UUID | None = Query(None, description="특정 식물의 세션만 집계"),
+    current_user_id: uuid.UUID = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
+):
+    """
+    현재 사용자가 남긴 답변 피드백을 상담 세션 단위로 집계해 반환합니다.
+    (helpful/not_helpful/unsafe/irrelevant 별 개수, 총합 내림차순)
+    """
+    try:
+        feedback_res = (
+            db.table("chat_feedback")
+            .select("message_id,rating")
+            .eq("user_id", str(current_user_id))
+            .execute()
+        )
+        feedback_rows = feedback_res.data or []
+        if not feedback_rows:
+            return []
+
+        message_ids = list({item["message_id"] for item in feedback_rows})
+        messages_res = (
+            db.table("chat_messages")
+            .select("id,session_id")
+            .in_("id", message_ids)
+            .execute()
+        )
+        session_of_message = {item["id"]: item["session_id"] for item in messages_res.data or []}
+
+        session_ids = list({sid for sid in session_of_message.values() if sid})
+        if not session_ids:
+            return []
+        sessions_query = (
+            db.table("chat_sessions")
+            .select("id,title,plant_id")
+            .eq("user_id", str(current_user_id))
+            .in_("id", session_ids)
+        )
+        if plantId:
+            sessions_query = sessions_query.eq("plant_id", str(plantId))
+        sessions_res = sessions_query.execute()
+        session_titles = {item["id"]: item.get("title") for item in sessions_res.data or []}
+
+        rating_field = {
+            "helpful": "helpful",
+            "not_helpful": "notHelpful",
+            "unsafe": "unsafe",
+            "irrelevant": "irrelevant",
+        }
+        stats: dict[str, dict] = {}
+        for item in feedback_rows:
+            session_id = session_of_message.get(item["message_id"])
+            # plantId 필터에 걸러졌거나 세션이 삭제된 피드백은 제외
+            if not session_id or session_id not in session_titles:
+                continue
+            entry = stats.setdefault(session_id, {"helpful": 0, "notHelpful": 0, "unsafe": 0, "irrelevant": 0, "total": 0})
+            field = rating_field.get(item["rating"])
+            if field:
+                entry[field] += 1
+            entry["total"] += 1
+
+        results = [
+            SessionFeedbackStats(
+                sessionId=uuid.UUID(session_id),
+                title=session_titles.get(session_id),
+                **counts
+            )
+            for session_id, counts in stats.items()
+        ]
+        results.sort(key=lambda item: item.total, reverse=True)
+        return results
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("피드백 통계 조회 중 오류 발생")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="피드백 통계 조회 중 오류가 발생했습니다."
         )
 
 

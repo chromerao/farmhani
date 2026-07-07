@@ -1,6 +1,7 @@
 import { mockChatResponse, mockPlants } from "./mockData";
 import type {
   CareLog,
+  ChatFeedbackItem,
   ChatFeedbackRating,
   ChatMessage,
   ChatMemoryMessage,
@@ -13,6 +14,7 @@ import type {
   PlantCareChatResponse,
   PlantCatalogItem,
   PlantPhoto,
+  SessionFeedbackStats,
   UploadSignedUrlResponse,
   WateringReminder
 } from "./types";
@@ -510,6 +512,17 @@ export async function submitChatFeedback(
     method: "POST",
     body: JSON.stringify({ rating, comment })
   });
+}
+
+export async function getSessionFeedback(sessionId: string) {
+  return request<ChatFeedbackItem[]>(`/api/v1/chat/sessions/${sessionId}/feedback`);
+}
+
+export async function getFeedbackSummary(plantId?: string) {
+  const params = new URLSearchParams();
+  if (plantId) params.set("plantId", plantId);
+  const query = params.toString();
+  return request<SessionFeedbackStats[]>(`/api/v1/chat/feedback/summary${query ? `?${query}` : ""}`);
 }
 
 export async function listChatSessions(plantId?: string, responseMode?: ChatResponseMode) {

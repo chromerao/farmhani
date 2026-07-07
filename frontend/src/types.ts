@@ -111,6 +111,22 @@ export type ChatSession = {
   createdAt: string;
 };
 
+export type ChatFeedbackItem = {
+  messageId: string;
+  rating: ChatFeedbackRating;
+  comment?: string | null;
+};
+
+export type SessionFeedbackStats = {
+  sessionId: string;
+  title?: string | null;
+  helpful: number;
+  notHelpful: number;
+  unsafe: number;
+  irrelevant: number;
+  total: number;
+};
+
 export type ChatMessage = {
   id: string;
   sessionId: string;

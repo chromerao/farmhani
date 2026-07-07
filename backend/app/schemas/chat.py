@@ -50,6 +50,22 @@ class ChatFeedbackResponse(BaseModel):
     rating: str
     saved: bool = True
 
+
+class ChatFeedbackItem(BaseModel):
+    messageId: UUID = Field(..., description="피드백이 달린 assistant 메시지 UUID")
+    rating: str = Field(..., description="helpful | not_helpful | unsafe | irrelevant")
+    comment: Optional[str] = Field(None, description="사용자 피드백 메모")
+
+
+class SessionFeedbackStats(BaseModel):
+    sessionId: UUID = Field(..., description="상담 세션 UUID")
+    title: Optional[str] = Field(None, description="세션 제목")
+    helpful: int = Field(0, description="도움됨 수")
+    notHelpful: int = Field(0, description="부정확 수")
+    unsafe: int = Field(0, description="위험함 수")
+    irrelevant: int = Field(0, description="무관함 수")
+    total: int = Field(0, description="피드백 총 수")
+
 class ChatSession(BaseModel):
     id: UUID
     userId: UUID
