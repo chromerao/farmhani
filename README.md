@@ -6,6 +6,8 @@
 
 *Farm하니? 메인 대시보드 — 내 식물 카드 · 건강 개요 · 빠른 AI 진단*
 
+https://farmhani.vercel.app/ (OpenAPI 07/12까지 지원 예정)
+
 ---
 
 ## 팀원 소개
