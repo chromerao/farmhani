@@ -329,6 +329,8 @@ export function createChrome(ctx: AppContext) {
           frameAlert(doc, "현재 화면 주소를 복사했습니다.");
         });
       } else if (text.includes("more_vert") || text.includes("filter_list") || text.includes("open_in_full") || text.includes("grid_view") || text.includes("view_list")) {
+        // 상담 페이지의 참고 문서 패널 컨트롤은 전용 토글(bindReferencePaneControls)이 담당
+        if (page === "chat" && target.closest("section")?.querySelector("#reference-pane")) return;
         element.addEventListener("click", (event) => {
           event.preventDefault();
           frameAlert(doc, "보기 옵션을 적용했습니다.");

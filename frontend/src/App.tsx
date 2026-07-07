@@ -155,6 +155,7 @@ function App() {
     if (page === "chat") {
       chatPage.bindChatModelInfo(doc);
       chatPage.bindChatModeSelector(doc);
+      chatPage.bindReferencePaneControls(doc);
       chatPage.initializeChatCanvas(doc);
       chatPage.bindChatPhotoPicker(doc);
       chatPage.bindChatImageDropAndPaste(doc);

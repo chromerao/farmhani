@@ -26,6 +26,8 @@ export const USER_PROFILE_PHOTO_KEY = "farmhani_user_profile_photo";
 export const NOTIFICATION_ENABLED_KEY = "farmhani_notification_enabled";
 export const WATERING_NOTIFIED_DATE_KEY = "farmhani_watering_notified_date";
 export const TODAY_CHECKLIST_EXPANDED_KEY = "farmhani_today_checklist_expanded";
+export const REFERENCE_PANE_HIDDEN_KEY = "farmhani_reference_pane_hidden";
+export const REFERENCE_PANE_COMPACT_KEY = "farmhani_reference_pane_compact";
 
 export const defaultPlantImages = [
   "https://images.unsplash.com/photo-1614594975525-e45190c55d0b?auto=format&fit=crop&w=1200&q=80",

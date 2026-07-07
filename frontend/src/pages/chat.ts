@@ -10,7 +10,12 @@ import {
   uploadPlantPhoto
 } from "../api";
 import type { ChatFeedbackRating, ChatMessage, ChatResponseMode, ChatSession, PlantCareChatResponse } from "../types";
-import { CHAT_RESPONSE_MODE_KEY, PENDING_DIAGNOSIS_QUESTION_KEY } from "../lib/constants";
+import {
+  CHAT_RESPONSE_MODE_KEY,
+  PENDING_DIAGNOSIS_QUESTION_KEY,
+  REFERENCE_PANE_COMPACT_KEY,
+  REFERENCE_PANE_HIDDEN_KEY
+} from "../lib/constants";
 import { createHiddenFileInput, escapeHtml, frameAlert, normalizedText } from "../lib/dom";
 import { formatDate } from "../lib/format";
 import {
@@ -262,6 +267,76 @@ export function createChatPage(ctx: AppContext) {
         </article>`;
       })
       .join("");
+  }
+
+  function bindReferencePaneControls(doc: Document) {
+    const pane = doc.getElementById("reference-pane");
+    const section = pane?.closest("section") as HTMLElement | null;
+    if (!pane || !section || section.dataset.refControlsBound === "true") return;
+    section.dataset.refControlsBound = "true";
+
+    // 간략 보기 CSS: 출처 카드에서 발췌문/문서 위치를 숨겨 제목·기관만 보여준다
+    if (!doc.querySelector("[data-ref-pane-style]")) {
+      const style = doc.createElement("style");
+      style.dataset.refPaneStyle = "true";
+      style.textContent = `
+        #reference-pane[data-compact="true"] article p { display: none; }
+        #reference-pane[data-compact="true"] article h4 { margin-bottom: 0; }
+        #reference-pane[data-compact="true"] article > div:last-child { margin-top: 8px; padding-top: 8px; }
+      `;
+      doc.head.appendChild(style);
+    }
+
+    const headerButtons = Array.from(section.querySelectorAll("button"));
+    const compactButton = headerButtons.find((button) => normalizedText(button).includes("filter_list")) as HTMLButtonElement | undefined;
+    const collapseButton = headerButtons.find((button) => normalizedText(button).includes("open_in_full")) as HTMLButtonElement | undefined;
+
+    // 접힌 상태에서 다시 열 수 있는 플로팅 탭 (데스크톱 전용 — 모바일에서는 패널 자체가 숨김)
+    const reopenButton = doc.createElement("button");
+    reopenButton.type = "button";
+    reopenButton.dataset.refPaneReopen = "true";
+    reopenButton.className =
+      "hidden lg:inline-flex fixed right-4 top-20 z-40 items-center gap-1.5 rounded-full bg-white border border-outline-variant/30 px-3 py-2 text-label-sm font-bold text-primary shadow-md hover:bg-growth-light transition-all";
+    reopenButton.innerHTML = '<span class="material-symbols-outlined text-[18px]">library_books</span>출처 보기';
+    doc.body.appendChild(reopenButton);
+
+    const applyHidden = (hidden: boolean) => {
+      section.style.display = hidden ? "none" : "";
+      reopenButton.style.display = hidden ? "" : "none";
+      localStorage.setItem(REFERENCE_PANE_HIDDEN_KEY, String(hidden));
+    };
+    const applyCompact = (compact: boolean) => {
+      pane.dataset.compact = String(compact);
+      localStorage.setItem(REFERENCE_PANE_COMPACT_KEY, String(compact));
+      if (compactButton) {
+        compactButton.title = compact ? "자세히 보기 (발췌문 표시)" : "간략히 보기 (제목만 표시)";
+        compactButton.classList.toggle("bg-growth-light", compact);
+      }
+    };
+
+    applyHidden(localStorage.getItem(REFERENCE_PANE_HIDDEN_KEY) === "true");
+    applyCompact(localStorage.getItem(REFERENCE_PANE_COMPACT_KEY) === "true");
+
+    if (collapseButton) {
+      collapseButton.title = "출처 사이드바 접기";
+      const icon = collapseButton.querySelector(".material-symbols-outlined");
+      if (icon) icon.textContent = "right_panel_close";
+      collapseButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        applyHidden(true);
+      });
+    }
+    reopenButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      applyHidden(false);
+    });
+
+    compactButton?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      applyCompact(pane.dataset.compact !== "true");
+    });
   }
 
   function bindChatModeSelector(doc: Document) {
@@ -670,6 +745,7 @@ export function createChatPage(ctx: AppContext) {
   return {
     bindChatModelInfo,
     bindChatModeSelector,
+    bindReferencePaneControls,
     initializeChatCanvas,
     bindChatPhotoPicker,
     bindChatImageDropAndPaste,

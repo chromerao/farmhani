@@ -1,5 +1,5 @@
 import { createCareLog, getPlant, hasAuthSession, hasSupabaseAuthConfig, storagePathToPublicUrl, updatePlant, uploadPlantPhoto } from "../api";
-import type { Plant } from "../types";
+import type { CareLog, Plant, PlantPhoto } from "../types";
 import { createHiddenFileInput, escapeHtml, frameAlert, normalizedText, showFormModal, showTextInputModal } from "../lib/dom";
 import { formatDate, todayDateInput } from "../lib/format";
 import { getSelectedPlantId } from "../lib/storage";
@@ -180,6 +180,96 @@ export function createDetailPage(ctx: AppContext) {
     doc.body.appendChild(button);
   }
 
+  function renderCareCalendar(doc: Document, plant: Plant & { careLogs?: CareLog[]; photos?: PlantPhoto[] }) {
+    const journalTitle = Array.from(doc.querySelectorAll("h2")).find((element) => normalizedText(element).includes("성장 일지"));
+    const journalBlock = (journalTitle?.closest("section") as HTMLElement | null) ?? (journalTitle?.parentElement as HTMLElement | null);
+    if (!journalBlock?.parentElement) return;
+    doc.querySelector("[data-care-calendar]")?.remove();
+
+    const dateKeyOf = (value?: string | null) => (value ? String(value).slice(0, 10) : "");
+    const wateredDays = new Set((plant.careLogs ?? []).filter((log) => log.wateredAt).map((log) => dateKeyOf(log.wateredAt)));
+    const logDays = new Set((plant.careLogs ?? []).map((log) => dateKeyOf(log.wateredAt || log.createdAt)));
+    const photoDays = new Set((plant.photos ?? []).map((photo) => dateKeyOf(photo.capturedAt || photo.createdAt)));
+
+    const card = doc.createElement("div");
+    card.dataset.careCalendar = "true";
+    card.className = "bg-white p-6 rounded-2xl shadow-sm border border-outline-variant/20 mb-8";
+    journalBlock.parentElement.insertBefore(card, journalBlock);
+
+    const now = new Date();
+    let monthOffset = 0;
+
+    const render = () => {
+      const base = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+      const year = base.getFullYear();
+      const month = base.getMonth();
+      const firstWeekday = base.getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+      const cells: string[] = [];
+      for (let i = 0; i < firstWeekday; i += 1) cells.push('<div class="h-9"></div>');
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const isWatered = wateredDays.has(key);
+        const isLogged = logDays.has(key);
+        const isToday = key === todayKey;
+        const tone = isWatered
+          ? "bg-primary text-white font-bold"
+          : isLogged
+            ? "bg-growth-light text-primary font-bold"
+            : "text-on-surface-variant";
+        cells.push(`<div class="relative h-9 flex items-center justify-center">
+          <span class="w-8 h-8 flex items-center justify-center rounded-full text-label-sm ${tone} ${isToday ? "ring-2 ring-primary/40" : ""}">${day}</span>
+          ${photoDays.has(key) ? '<span class="absolute bottom-0.5 w-1.5 h-1.5 rounded-full bg-tertiary"></span>' : ""}
+        </div>`);
+      }
+
+      card.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 class="text-headline-md font-bold text-on-surface flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary">calendar_month</span>케어 캘린더
+            </h2>
+            <p class="text-label-sm text-on-surface-variant mt-1">${escapeHtml(plant.name)}의 물주기와 기록이 잔디처럼 쌓입니다.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-growth-light hover:text-primary transition-all" data-calendar-prev="true" aria-label="이전 달">
+              <span class="material-symbols-outlined text-[20px]">chevron_left</span>
+            </button>
+            <span class="text-label-md font-bold text-on-surface min-w-[92px] text-center">${year}년 ${month + 1}월</span>
+            <button type="button" class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center transition-all ${
+              monthOffset >= 0 ? "opacity-30 cursor-default" : "text-on-surface-variant hover:bg-growth-light hover:text-primary"
+            }" data-calendar-next="true" aria-label="다음 달">
+              <span class="material-symbols-outlined text-[20px]">chevron_right</span>
+            </button>
+          </div>
+        </div>
+        <div class="grid grid-cols-7 text-center text-label-sm text-outline mb-1">
+          ${["일", "월", "화", "수", "목", "금", "토"].map((label) => `<span>${label}</span>`).join("")}
+        </div>
+        <div class="grid grid-cols-7">${cells.join("")}</div>
+        <div class="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-outline-variant/10 text-label-sm text-on-surface-variant">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-primary"></span>물주기</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-growth-light border border-primary/20"></span>관리 기록</span>
+          <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>사진</span>
+        </div>`;
+
+      card.querySelector("[data-calendar-prev]")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        monthOffset -= 1;
+        render();
+      });
+      card.querySelector("[data-calendar-next]")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (monthOffset >= 0) return;
+        monthOffset += 1;
+        render();
+      });
+    };
+
+    render();
+  }
+
   function bindDetailData(doc: Document) {
     const plantId = getSelectedPlantId();
     if (!plantId || (hasSupabaseAuthConfig() && !hasAuthSession())) return;
@@ -187,6 +277,7 @@ export function createDetailPage(ctx: AppContext) {
     void getPlant(plantId)
       .then((plant) => {
         currentPlant = plant;
+        renderCareCalendar(doc, plant);
         const heroName = doc.querySelector("h1");
         const heroSpecies = heroName?.nextElementSibling;
         const primaryImage = plant.imageUrl || storagePathToPublicUrl(plant.photos?.[0]?.storagePath);
