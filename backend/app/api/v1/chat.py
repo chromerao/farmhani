@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, status, Depends, HTTPException, Path, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from supabase import Client
 from app.auth.security import get_current_user
 from app.core.config import settings
@@ -194,6 +194,41 @@ def list_chat_sessions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="상담 세션 목록 조회 중 오류가 발생했습니다."
+        )
+
+
+@router.delete("/sessions/{sessionId}", status_code=status.HTTP_204_NO_CONTENT, summary="상담 세션 삭제")
+def delete_chat_session(
+    sessionId: uuid.UUID = Path(..., description="삭제할 상담 세션 UUID"),
+    current_user_id: uuid.UUID = Depends(get_current_user),
+    db: Client = Depends(get_supabase_client)
+):
+    """현재 사용자가 소유한 상담방과 연관 메시지·피드백을 삭제합니다."""
+    try:
+        session_check = (
+            db.table("chat_sessions")
+            .select("id")
+            .eq("id", str(sessionId))
+            .eq("user_id", str(current_user_id))
+            .limit(1)
+            .execute()
+        )
+        if not session_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="상담방을 찾을 수 없거나 삭제할 권한이 없습니다."
+            )
+
+        # chat_messages와 chat_feedback은 DB 외래 키의 ON DELETE CASCADE로 함께 정리됩니다.
+        db.table("chat_sessions").delete().eq("id", str(sessionId)).eq("user_id", str(current_user_id)).execute()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("상담 세션 삭제 중 오류 발생")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="상담방을 삭제하는 중 오류가 발생했습니다."
         )
 
 @router.post("/messages/{messageId}/feedback", response_model=ChatFeedbackResponse, status_code=status.HTTP_200_OK, summary="AI 답변 피드백 저장")

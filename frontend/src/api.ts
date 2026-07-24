@@ -19,15 +19,22 @@ import type {
   WateringReminder
 } from "./types";
 
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_BACKEND_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? "http://localhost:8000" : "");
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const SUPABASE_STORAGE_BUCKET = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || "plant-photos";
+const ENABLE_DEVELOPMENT_MOCKS = import.meta.env.MODE === "development" && import.meta.env.VITE_ENABLE_MOCKS === "true";
 
 const ACCESS_TOKEN_KEY = "farmhani_access_token";
 const REFRESH_TOKEN_KEY = "farmhani_refresh_token";
 const LOCAL_PLANTS_KEY = "farmhani_local_plants";
+const LOCAL_CARE_LOGS_KEY = "farmhani_local_care_logs";
+const LOCAL_PLANT_PHOTOS_KEY = "farmhani_local_plant_photos";
 const MAX_PHOTO_UPLOAD_BYTES = 8 * 1024 * 1024;
+let refreshSessionPromise: Promise<string | undefined> | undefined;
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -50,6 +57,13 @@ export class AuthRequiredError extends Error {
   }
 }
 
+export class FrontendConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FrontendConfigError";
+  }
+}
+
 export function isAuthRequiredError(error: unknown) {
   return error instanceof AuthRequiredError || (error instanceof Error && error.name === "AuthRequiredError");
 }
@@ -58,12 +72,16 @@ export function hasSupabaseAuthConfig() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 }
 
+export function isDevelopmentMockMode() {
+  return ENABLE_DEVELOPMENT_MOCKS;
+}
+
 export function getAccessToken() {
   return localStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
 export function hasAuthSession() {
-  return Boolean(getAccessToken());
+  return ENABLE_DEVELOPMENT_MOCKS || Boolean(getAccessToken());
 }
 
 export function storagePathToPublicUrl(storagePath?: string | null) {
@@ -91,6 +109,46 @@ function saveAuthSession(data: AuthResponse) {
   }
 }
 
+async function refreshAuthSession(): Promise<string | undefined> {
+  if (refreshSessionPromise) return refreshSessionPromise;
+
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+  if (!refreshToken || !hasSupabaseAuthConfig()) return undefined;
+
+  const pendingRefresh = (async () => {
+    let response: Response;
+    try {
+      response = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+    } catch {
+      throw new Error("인증 서버 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요.");
+    }
+
+    if (response.status === 400 || response.status === 401) return undefined;
+    if (!response.ok) {
+      throw new Error("로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+
+    const data = (await response.json()) as AuthResponse;
+    if (!data.access_token) return undefined;
+    saveAuthSession(data);
+    return data.access_token;
+  })();
+
+  refreshSessionPromise = pendingRefresh;
+  try {
+    return await pendingRefresh;
+  } finally {
+    if (refreshSessionPromise === pendingRefresh) refreshSessionPromise = undefined;
+  }
+}
+
 export function clearAuthSession() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
@@ -98,21 +156,47 @@ export function clearAuthSession() {
 
 async function supabaseAuthRequest(path: string, body: unknown): Promise<AuthResponse> {
   if (!hasSupabaseAuthConfig()) {
-    throw new Error("Supabase frontend auth env is not configured.");
+    throw new FrontendConfigError("로그인 서비스 설정이 없습니다. 관리자에게 환경변수 설정을 요청해 주세요.");
   }
 
-  const response = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/${path}`, {
+  const requestUrl = `${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/${path}`;
+  const requestInit: RequestInit = {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY
     },
     body: JSON.stringify(body)
-  });
+  };
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, requestInit);
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    response = await fetch(requestUrl, requestInit);
+  }
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `Supabase auth failed: ${response.status}`);
+    let authMessage = text;
+    try {
+      const payload = JSON.parse(text) as { error_description?: string; msg?: string; message?: string };
+      authMessage = payload.error_description || payload.msg || payload.message || text;
+    } catch {
+      // Plain-text errors are already suitable for the fallback below.
+    }
+
+    const normalizedMessage = authMessage.toLowerCase();
+    if (normalizedMessage.includes("invalid login credentials")) {
+      throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");
+    }
+    if (normalizedMessage.includes("email not confirmed")) {
+      throw new Error("이메일 인증이 아직 완료되지 않았습니다. 받은 편지함을 확인해 주세요.");
+    }
+    if (response.status === 429) {
+      throw new Error("로그인 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.");
+    }
+    throw new Error(authMessage || `로그인 요청에 실패했습니다. (${response.status})`);
   }
 
   const data = (await response.json()) as AuthResponse;
@@ -133,6 +217,9 @@ export async function signUpWithPassword(email: string, password: string) {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (!API_BASE_URL) {
+    throw new FrontendConfigError("백엔드 연결 주소가 설정되지 않았습니다. VITE_BACKEND_URL을 확인해 주세요.");
+  }
   const headers = new Headers(options.headers);
   const bodyIsFormData = options.body instanceof FormData;
 
@@ -148,13 +235,41 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers
-  });
+  const requestUrl = `${API_BASE_URL}${path}`;
+  const requestInit = { ...options, headers };
+  const method = (options.method || "GET").toUpperCase();
 
-  if (response.status === 401 || response.status === 403) {
+  async function sendWithTransientRetry() {
+    let response: Response;
+    try {
+      response = await fetch(requestUrl, requestInit);
+    } catch (error) {
+      if (method !== "GET") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 220));
+      response = await fetch(requestUrl, requestInit);
+    }
+
+    if (method === "GET" && response.status === 503) {
+      await new Promise((resolve) => setTimeout(resolve, 320));
+      response = await fetch(requestUrl, requestInit);
+    }
+    return response;
+  }
+
+  let response = await sendWithTransientRetry();
+  if (options.auth !== false && response.status === 401) {
+    const refreshedAccessToken = await refreshAuthSession();
+    if (refreshedAccessToken) {
+      headers.set("Authorization", `Bearer ${refreshedAccessToken}`);
+      response = await sendWithTransientRetry();
+    }
+  }
+
+  if (response.status === 401) {
     throw new AuthRequiredError("세션이 만료되었거나 로그인이 필요합니다.");
+  }
+  if (response.status === 403) {
+    throw new Error("이 작업을 수행할 권한이 없습니다.");
   }
 
   if (!response.ok) {
@@ -183,14 +298,56 @@ function saveLocalPlants(plants: Plant[]) {
   localStorage.setItem(LOCAL_PLANTS_KEY, JSON.stringify(plants));
 }
 
+function loadLocalCareLogs(): CareLog[] {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_CARE_LOGS_KEY) || "[]") as CareLog[];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalCareLogs(logs: CareLog[]) {
+  localStorage.setItem(LOCAL_CARE_LOGS_KEY, JSON.stringify(logs));
+}
+
+function loadLocalPlantPhotos(): PlantPhoto[] {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_PLANT_PHOTOS_KEY) || "[]") as PlantPhoto[];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalPlantPhotos(photos: PlantPhoto[]) {
+  localStorage.setItem(LOCAL_PLANT_PHOTOS_KEY, JSON.stringify(photos));
+}
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result || "")), { once: true });
+    reader.addEventListener("error", () => reject(new Error("사진을 읽지 못했습니다.")), { once: true });
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function getPlants(): Promise<Plant[]> {
-  if (!hasSupabaseAuthConfig()) {
+  if (ENABLE_DEVELOPMENT_MOCKS) {
     return loadLocalPlants();
   }
   return request<Plant[]>("/api/v1/plants");
 }
 
 export async function getPlant(plantId: string) {
+  if (ENABLE_DEVELOPMENT_MOCKS) {
+    const plant = loadLocalPlants().find((item) => item.id === plantId);
+    if (!plant) throw new Error("식물 정보를 찾지 못했습니다.");
+    return {
+      ...plant,
+      careLogs: loadLocalCareLogs().filter((item) => item.plantId === plantId),
+      photos: loadLocalPlantPhotos().filter((item) => item.plantId === plantId)
+    };
+  }
   return request<Plant & { careLogs: CareLog[]; photos: PlantPhoto[] }>(`/api/v1/plants/${plantId}`);
 }
 
@@ -198,11 +355,13 @@ export async function updatePlant(
   plantId: string,
   input: Partial<Pick<Plant, "name" | "species" | "location" | "sunlight" | "imageUrl">>
 ): Promise<Plant> {
-  if (!hasSupabaseAuthConfig()) {
+  if (ENABLE_DEVELOPMENT_MOCKS) {
     const plants = loadLocalPlants();
     const nextPlants = plants.map((plant) => (plant.id === plantId ? { ...plant, ...input } : plant));
     saveLocalPlants(nextPlants);
-    return nextPlants.find((plant) => plant.id === plantId) ?? plants[0];
+    const updatedPlant = nextPlants.find((plant) => plant.id === plantId) ?? plants[0];
+    if (!updatedPlant) throw new Error("수정할 식물을 찾지 못했습니다.");
+    return updatedPlant;
   }
 
   return request<Plant>(`/api/v1/plants/${plantId}`, {
@@ -212,8 +371,10 @@ export async function updatePlant(
 }
 
 export async function deletePlant(plantId: string): Promise<void> {
-  if (!hasSupabaseAuthConfig()) {
+  if (ENABLE_DEVELOPMENT_MOCKS) {
     saveLocalPlants(loadLocalPlants().filter((plant) => plant.id !== plantId));
+    saveLocalCareLogs(loadLocalCareLogs().filter((log) => log.plantId !== plantId));
+    saveLocalPlantPhotos(loadLocalPlantPhotos().filter((photo) => photo.plantId !== plantId));
     return;
   }
 
@@ -223,7 +384,7 @@ export async function deletePlant(plantId: string): Promise<void> {
 }
 
 export async function createPlant(input: Pick<Plant, "name" | "species" | "location" | "sunlight">): Promise<Plant> {
-  if (!hasSupabaseAuthConfig()) {
+  if (ENABLE_DEVELOPMENT_MOCKS) {
     const plant: Plant = {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
@@ -245,6 +406,16 @@ export async function createCareLog(
   plantId: string,
   input: Pick<CareLog, "wateredAt" | "leafCondition" | "soilCondition" | "memo">
 ) {
+  if (ENABLE_DEVELOPMENT_MOCKS) {
+    const log: CareLog = {
+      id: crypto.randomUUID(),
+      plantId,
+      createdAt: new Date().toISOString(),
+      ...input
+    };
+    saveLocalCareLogs([log, ...loadLocalCareLogs()]);
+    return log;
+  }
   return request<CareLog>(`/api/v1/plants/${plantId}/care-logs`, {
     method: "POST",
     body: JSON.stringify(input)
@@ -259,6 +430,7 @@ export async function searchPlantCatalog(q: string, limit = 6): Promise<PlantCat
   try {
     return await request<PlantCatalogItem[]>(`/api/v1/plant-catalog?${params.toString()}`, { auth: false });
   } catch (error) {
+    if (!ENABLE_DEVELOPMENT_MOCKS) throw error;
     console.warn("[Farmhani] Falling back to local plant catalog:", error);
     const term = q.trim().toLowerCase();
     return [
@@ -351,6 +523,19 @@ export async function uploadPlantPhoto(plantId: string, file: File, note?: strin
     throw new Error("사진 파일이 너무 큽니다. 8MB 이하로 업로드해주세요.");
   }
 
+  if (ENABLE_DEVELOPMENT_MOCKS) {
+    const photo: PlantPhoto = {
+      id: crypto.randomUUID(),
+      plantId,
+      storagePath: await fileToDataUrl(file),
+      capturedAt: new Date().toISOString(),
+      note,
+      createdAt: new Date().toISOString()
+    };
+    saveLocalPlantPhotos([photo, ...loadLocalPlantPhotos()]);
+    return photo;
+  }
+
   try {
     const signed = await getUploadSignedUrl(file);
     await uploadFileToSignedUrl(signed.signedUrl, file);
@@ -378,7 +563,7 @@ export async function askPlantCare(
     recentMessages?: ChatMemoryMessage[];
   } = {}
 ): Promise<PlantCareChatResponse> {
-  if (!hasSupabaseAuthConfig()) {
+  if (ENABLE_DEVELOPMENT_MOCKS) {
     return mockChatResponse;
   }
 
@@ -410,7 +595,7 @@ export async function askPlantCareStream(
   } = {},
   onProgress?: (progress: ChatProgressEvent) => void
 ): Promise<PlantCareChatResponse> {
-  if (!hasSupabaseAuthConfig()) {
+  if (ENABLE_DEVELOPMENT_MOCKS) {
     return mockChatResponse;
   }
 
@@ -419,13 +604,11 @@ export async function askPlantCareStream(
     throw new AuthRequiredError();
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/chat/plant-care/stream`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify({
+  if (!API_BASE_URL) {
+    throw new FrontendConfigError("백엔드 연결 주소가 설정되지 않았습니다. VITE_BACKEND_URL을 확인해 주세요.");
+  }
+
+  const requestBody = JSON.stringify({
       plantId,
       careLogId: options.careLogId,
       photoId: options.photoId,
@@ -434,11 +617,27 @@ export async function askPlantCareStream(
       responseMode: options.responseMode ?? "expert",
       recentMessages: options.recentMessages ?? [],
       question
-    })
+  });
+  const sendStreamRequest = (accessToken: string) => fetch(`${API_BASE_URL}/api/v1/chat/plant-care/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`
+    },
+    body: requestBody
   });
 
-  if (response.status === 401 || response.status === 403) {
+  let response = await sendStreamRequest(token);
+  if (response.status === 401) {
+    const refreshedAccessToken = await refreshAuthSession();
+    if (refreshedAccessToken) response = await sendStreamRequest(refreshedAccessToken);
+  }
+
+  if (response.status === 401) {
     throw new AuthRequiredError("세션이 만료되었거나 로그인이 필요합니다.");
+  }
+  if (response.status === 403) {
+    throw new Error("이 상담 기록에 접근할 권한이 없습니다.");
   }
   // 구버전 백엔드(스트림 미지원) 등에서는 기존 방식으로 자동 전환
   if (response.status === 404 || response.status === 405 || !response.body) {
@@ -486,15 +685,31 @@ export async function askPlantCareStream(
 }
 
 export async function getWateringReminders(): Promise<WateringReminder[]> {
-  if (!hasSupabaseAuthConfig()) {
-    return [];
+  if (ENABLE_DEVELOPMENT_MOCKS) {
+    return loadLocalPlants().map((plant, index) => ({
+      plantId: plant.id,
+      name: plant.name,
+      species: plant.species,
+      lastWateredAt: index === 1 ? "2026-07-18" : "2026-07-21",
+      daysSinceWatered: index === 1 ? 5 : 2,
+      intervalDays: index === 1 ? 4 : 7,
+      status: index === 1 ? "due" : index === 2 ? "upcoming" : "ok"
+    }));
   }
   return request<WateringReminder[]>("/api/v1/plants/reminders");
 }
 
 export async function getTodayChecklist(): Promise<ChecklistTask[]> {
-  if (!hasSupabaseAuthConfig()) {
-    return [];
+  if (ENABLE_DEVELOPMENT_MOCKS) {
+    return loadLocalPlants().slice(0, 2).map((plant, index) => ({
+      id: `mock-task-${plant.id}`,
+      plantId: plant.id,
+      plantName: plant.name,
+      taskType: index === 0 ? "observe" : "water",
+      title: index === 0 ? "새 잎과 흙 상태 확인" : "물주기 전 흙 수분 확인",
+      description: index === 0 ? "지난 사진과 비교해 잎의 변화를 기록해 보세요." : "겉흙만 보고 판단하지 말고 2~3cm 아래를 확인해요.",
+      done: false
+    }));
   }
   return request<ChecklistTask[]>("/api/v1/plants/checklist");
 }
@@ -531,6 +746,10 @@ export async function listChatSessions(plantId?: string, responseMode?: ChatResp
   if (responseMode) params.set("responseMode", responseMode);
   const query = params.toString();
   return request<ChatSession[]>(`/api/v1/chat/sessions${query ? `?${query}` : ""}`);
+}
+
+export async function deleteChatSession(sessionId: string) {
+  return request<void>(`/api/v1/chat/sessions/${sessionId}`, { method: "DELETE" });
 }
 
 export async function listChatMessages(sessionId: string) {

@@ -1,4 +1,5 @@
 """8~9단계: 답변 생성 및 안전성 검토 노드."""
+import logging
 import os
 from typing import Dict, Any
 
@@ -12,6 +13,8 @@ from app.services.rag.common import (
     plant_persona_status,
     recall_user_name,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # 7. generate_answer 노드
@@ -32,6 +35,7 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
         for item in chat_history[-8:]
     )
     remembered_name = recall_user_name(question, chat_history)
+    generation_notice = None
 
     if extract_user_name(question):
         if is_companion_mode:
@@ -176,11 +180,16 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
                     "citations": citations
                 }
             }
-        except Exception as e:
-            print(f"[RAG LLM WARNING] OpenAI 답변 생성 중 실패, 룰베이스 전환: {e}")
+        except Exception as exc:
+            logger.warning("OpenAI answer generation failed; using evidence fallback (%s)", type(exc).__name__)
+            generation_notice = "현재 AI 생성 연결을 확인할 수 없어, 질문과 검색 문서를 바탕으로 한 기본 관찰 가이드를 표시합니다."
+    else:
+        generation_notice = "AI 생성 설정이 없어, 질문과 검색 문서를 바탕으로 한 기본 관찰 가이드를 표시합니다."
             
-    combined_docs_text = " ".join([d.get("content", "") for d in docs])
-    combined_signal_text = f"{question} {context} {image_description} {' '.join(state.get('image_signals') or [])} {combined_docs_text}".lower()
+    # Classify only the current question and current image signals. Including every
+    # retrieved document here made a single keyword from a broad source dominate
+    # unrelated questions and produced the same fallback answer repeatedly.
+    combined_signal_text = f"{question} {image_description} {' '.join(state.get('image_signals') or [])}".lower()
 
     if not docs:
         if is_companion_mode:
@@ -271,7 +280,8 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
             "반점이 원형으로 커지거나 주변 잎으로 번지는지 관찰합니다."
         ]
     else:
-        summary = "검색된 공식 자료와 식물 기록을 기준으로 기본 관리 상태를 점검해야 합니다."
+        question_excerpt = " ".join(question.split())[:48]
+        summary = f"‘{question_excerpt}’ 질문은 한 가지 증상으로 분류하기 어려워, 검색된 공식 자료와 식물 기록을 기준으로 기본 관리 상태부터 점검해야 합니다."
         possible_causes = [
             "물주기, 광량, 통풍 중 하나가 현재 식물 조건과 맞지 않을 가능성",
             "최근 위치 변경이나 계절 변화에 따른 일시적 적응 반응"
@@ -304,7 +314,8 @@ def generate_answer(state: AgentState) -> Dict[str, Any]:
             "todayActions": today_actions,
             "observationChecklist": checklist,
             "citations": citations
-        }
+        },
+        "generation_notice": generation_notice
     }
 
 # 8. safety_review 노드
@@ -316,6 +327,9 @@ def safety_review(state: AgentState) -> Dict[str, Any]:
         safety_notice = "친근한 대화 모드의 답변이지만, 실제 관리는 입력된 내용과 공식 지침서에 기반한 참고 가이드입니다. 증상이 지속되면 전문가 확인을 권장합니다."
     else:
         safety_notice = "본 관리 가이드는 입력된 내용 및 공식 지침서에 기반하여 생성되었으며 특정 질병을 확정하는 것이 아닙니다. 상세 증상이 지속되면 농업기술센터 전문가의 도움을 받으십시오."
+
+    if state.get("generation_notice"):
+        safety_notice = f"{state['generation_notice']} {safety_notice}"
     
     today_actions = []
     for act in draft["todayActions"]:

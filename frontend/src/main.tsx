@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
+import { App } from "./App";
 import "./styles.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -9,11 +9,22 @@ createRoot(document.getElementById("root")!).render(
   </React.StrictMode>
 );
 
-// PWA 서비스워커 등록 (프로덕션 빌드에서만 — dev에서는 HMR과 충돌 방지)
+// Keep production PWA clients on the latest deployed bundle.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  let isRefreshing = false;
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (isRefreshing) return;
+    isRefreshing = true;
+    window.location.reload();
+  });
+
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((error) => {
-      console.warn("[Farmhani] 서비스워커 등록 실패:", error);
-    });
+    navigator.serviceWorker
+      .register("/sw.js", { updateViaCache: "none" })
+      .then((registration) => registration.update())
+      .catch((error) => {
+        console.warn("[Farmhani] service worker registration failed:", error);
+      });
   });
 }

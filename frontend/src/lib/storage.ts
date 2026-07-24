@@ -6,7 +6,8 @@ import {
   LAST_SESSION_ID_KEY,
   NOTIFICATION_ENABLED_KEY,
   SELECTED_PLANT_ID_KEY,
-  USER_PROFILE_PHOTO_KEY
+  USER_PROFILE_PHOTO_KEY,
+  WATERING_NOTIFIED_DATE_KEY
 } from "./constants";
 
 export function setSelectedPlantId(plantId: string) {
@@ -82,4 +83,12 @@ export function isNotificationsEnabled() {
 
 export function setNotificationsEnabled(enabled: boolean) {
   localStorage.setItem(NOTIFICATION_ENABLED_KEY, String(enabled));
+}
+
+export function getWateringNotifiedDate() {
+  return localStorage.getItem(WATERING_NOTIFIED_DATE_KEY);
+}
+
+export function setWateringNotifiedDate(date: string) {
+  localStorage.setItem(WATERING_NOTIFIED_DATE_KEY, date);
 }

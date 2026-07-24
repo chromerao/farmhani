@@ -151,6 +151,7 @@ class AgentState(TypedDict):
     retrieved_docs: List[Dict[str, Any]]
     draft_answer: Dict[str, Any]
     final_answer: Dict[str, Any]
+    generation_notice: Optional[str]
     session_id: Optional[str]
     message_id: Optional[str]
     new_session: bool

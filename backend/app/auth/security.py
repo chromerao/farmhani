@@ -5,6 +5,7 @@ import jwt
 from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
+from supabase_auth.errors import AuthApiError, AuthInvalidJwtError, AuthRetryableError, AuthUnknownError
 
 from app.core.config import settings
 from app.db.session import supabase, reusable_oauth2
@@ -15,9 +16,14 @@ _INVALID_TOKEN_ERROR = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
     detail="만료되거나 올바르지 않은 토큰입니다."
 )
+_AUTH_SERVICE_UNAVAILABLE_ERROR = HTTPException(
+    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    detail="인증 서버 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요."
+)
 
 # JWKS 공개키는 프로세스 수명 동안 캐시된다 (PyJWKClient 내부 캐시 + lifespan)
 _jwk_client: PyJWKClient | None = None
+_JWT_CLOCK_SKEW_LEEWAY_SECONDS = 30
 
 
 def _get_jwk_client() -> PyJWKClient:
@@ -48,6 +54,7 @@ def _verify_token_locally(token: str) -> uuid.UUID | None:
             settings.SUPABASE_JWT_SECRET,
             algorithms=[alg],
             audience=settings.JWT_AUDIENCE,
+            leeway=_JWT_CLOCK_SKEW_LEEWAY_SECONDS,
         )
     elif alg in {"RS256", "RS512", "ES256", "ES512", "EdDSA"}:
         # 신규 프로젝트: JWKS 공개키(비대칭) 서명
@@ -57,6 +64,7 @@ def _verify_token_locally(token: str) -> uuid.UUID | None:
             signing_key.key,
             algorithms=[alg],
             audience=settings.JWT_AUDIENCE,
+            leeway=_JWT_CLOCK_SKEW_LEEWAY_SECONDS,
         )
     else:
         return None
@@ -96,5 +104,16 @@ def get_current_user(
         return uuid.UUID(auth_response.user.id)
     except HTTPException:
         raise
-    except Exception:
+    except AuthInvalidJwtError:
         raise _INVALID_TOKEN_ERROR
+    except AuthApiError as exc:
+        if exc.status in {401, 403}:
+            raise _INVALID_TOKEN_ERROR
+        logger.warning("Supabase Auth API 검증 실패: status=%s code=%s", exc.status, exc.code)
+        raise _AUTH_SERVICE_UNAVAILABLE_ERROR
+    except (AuthRetryableError, AuthUnknownError) as exc:
+        logger.warning("Supabase Auth 일시 오류: %s", exc)
+        raise _AUTH_SERVICE_UNAVAILABLE_ERROR
+    except Exception:
+        logger.exception("Supabase Auth 검증 중 예기치 않은 오류")
+        raise _AUTH_SERVICE_UNAVAILABLE_ERROR

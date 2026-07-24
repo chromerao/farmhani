@@ -191,6 +191,12 @@ class MockSupabaseTable:
                         "created_at": "2026-06-25T12:00:00+00:00"
                     }
                 ]
+                eq_queries = [q for q in self.queries if q[0] == "eq"]
+                requested_id = next((str(q[2]) for q in eq_queries if q[1] == "id"), None)
+                if requested_id and requested_id != data[0]["id"]:
+                    data = []
+            elif any(q[0] == "delete" for q in self.queries):
+                data = [{"id": "e3b07384-d113-49c3-a558-1ec114a84d44"}]
             elif any(q[0] == "insert" for q in self.queries):
                 insert_val = next(q[1] for q in self.queries if q[0] == "insert")
                 data = [
@@ -529,6 +535,19 @@ def test_list_chat_sessions_success():
     assert isinstance(data, list)
     assert len(data) == 1
     assert data[0]["id"] == "e3b07384-d113-49c3-a558-1ec114a84d44"
+
+
+def test_delete_chat_session_success():
+    session_id = "e3b07384-d113-49c3-a558-1ec114a84d44"
+    response = client.delete(f"/api/v1/chat/sessions/{session_id}")
+    assert response.status_code == 204
+    assert response.content == b""
+
+
+def test_delete_chat_session_not_found():
+    session_id = "00000000-0000-0000-0000-000000000000"
+    response = client.delete(f"/api/v1/chat/sessions/{session_id}")
+    assert response.status_code == 404
 
 def test_list_chat_messages_success():
     session_id = "e3b07384-d113-49c3-a558-1ec114a84d44"

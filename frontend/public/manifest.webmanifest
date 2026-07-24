@@ -1,7 +1,7 @@
 {
-  "name": "Farm하니? - AI 식물 주치의",
-  "short_name": "Farm하니",
-  "description": "사진과 재배 기록으로 진단하는 RAG 기반 식물 관리 상담 서비스",
+  "name": "Farm하니? - AI 식물 케어 파트너",
+  "short_name": "Farm하니?",
+  "description": "사진과 재배 기록을 바탕으로 관리 방향을 안내하는 식물 케어 서비스",
   "lang": "ko",
   "start_url": "/",
   "scope": "/",

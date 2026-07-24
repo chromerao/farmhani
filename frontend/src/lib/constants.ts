@@ -1,14 +1,6 @@
 // 페이지 라우팅 상수 및 로컬스토리지 키
 export type DesignPage = "login" | "dashboard" | "add" | "detail" | "chat";
 
-export const pageSources: Record<DesignPage, string> = {
-  login: "/design/Login.html",
-  dashboard: "/design/dashboard.html",
-  add: "/design/add_my_plant.html",
-  detail: "/design/my_plant_information.html",
-  chat: "/design/AI_chatpage.html"
-};
-
 const hashToPage: Record<string, DesignPage> = {
   "#login": "login",
   "#dashboard": "dashboard",

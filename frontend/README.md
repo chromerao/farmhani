@@ -1,6 +1,6 @@
 # Frontend
 
-식물 주치의 AI의 사용자 화면 영역입니다. `frontend/design/`의 HTML 시안을 최대한 그대로 유지하기 위해 Vite + React 앱에서 원본 HTML을 직접 렌더링합니다.
+Farm하니의 사용자 화면 영역입니다. Vite + React + TypeScript 기반의 네이티브 컴포넌트로 로그인, 식물 관리, 기록, AI 상태 점검 흐름을 제공합니다.
 
 ## 권장 스택
 
@@ -9,7 +9,7 @@
 - API client는 `contracts/api/openapi.yaml` 기준으로 생성 또는 수동 정의
 - 배포: Vercel 추천
 
-## 예정 화면
+## 제공 화면
 
 - 로그인/회원가입/로그아웃
 - 식물 목록
@@ -17,6 +17,7 @@
 - 식물 상세
 - 사진 업로드
 - 재배일지 입력
+- 물주기 알림 목록 및 브라우저 알림 설정
 - AI 상담 요청/결과
 - 근거 문서 표시
 
@@ -25,7 +26,7 @@
 1. AI가 만든 원본 UI 파일을 `frontend/ui-drop/`에 둡니다.
 2. 불필요한 mock 데이터, 하드코딩 URL, secret이 없는지 확인합니다.
 3. 실제 app 구조에 맞게 component/page 단위로 이동합니다.
-4. API 호출은 `NEXT_PUBLIC_BACKEND_URL`을 사용합니다.
+4. API 호출은 `VITE_BACKEND_URL`을 사용합니다.
 5. 로그인 상태와 token 전달을 연결합니다.
 
 ## 인증 기준
@@ -53,10 +54,19 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 ```
 
-현재 화면은 디자인 시안 보존을 우선해 `frontend/design/*.html`을 그대로 표시합니다. Backend 연동 단계에서는 원본 시안을 기준으로 필요한 화면부터 React 컴포넌트화합니다.
+개발 중에만 mock 데이터를 명시적으로 사용하려면 아래 값을 추가합니다.
+
+```bash
+VITE_ENABLE_MOCKS=true
+```
+
+mock은 Vite의 `development` 모드에서만 활성화됩니다. 프로덕션에서는 환경변수가 누락되더라도 mock 결과를 표시하지 않고 연결 설정 오류를 사용자에게 안내합니다.
+
+이전 HTML 시안은 비교용으로 `frontend/design/`에만 보존되어 있으며 실행 앱과 배포 결과에서는 로드하지 않습니다.
 
 ## 배포
 
 - Vercel project를 `frontend/` root 기준으로 연결합니다.
 - public 환경변수만 Vercel에 등록합니다.
-- `NEXT_PUBLIC_BACKEND_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`가 필수입니다.
+- `VITE_BACKEND_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`가 필수입니다.
+- `VITE_ENABLE_MOCKS`는 프로덕션에 등록하지 않습니다.

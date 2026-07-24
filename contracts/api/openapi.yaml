@@ -193,6 +193,22 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ChatSession"
+  /api/v1/chat/sessions/{sessionId}:
+    delete:
+      summary: Delete one of the current user's chat sessions
+      description: Deletes the session and its related messages and feedback.
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Chat session deleted successfully
+        "404":
+          description: Chat session not found or access denied
   /api/v1/chat/sessions/{sessionId}/messages:
     get:
       summary: List messages within a chat session
